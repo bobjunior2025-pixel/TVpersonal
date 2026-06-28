@@ -368,7 +368,7 @@ app.get('/api/warez/search', async (req, res) => {
 
   const qLower = query.toLowerCase();
 
-  // If no GEMINI_API_KEY is present, we use a rich offline local catalog of blockbusters/hits
+  // Offline local catalog of blockbuster hits and popular movies/series (no AI/Gemini used for search)
   const backupDb = [
     {
       id: 'warez_157336',
@@ -544,74 +544,197 @@ app.get('/api/warez/search', async (req, res) => {
       backdropUrl: 'https://images.unsplash.com/photo-1509248961158-e54f6934749c?auto=format&fit=crop&q=80&w=1200',
       seasonsCount: 1,
       episodesCount: [8]
+    },
+    {
+      id: 'warez_872585',
+      tmdbId: '872585',
+      imdbId: 'tt15398776',
+      title: 'Oppenheimer',
+      type: 'movie',
+      genres: ['História', 'Drama', 'Biografia'],
+      year: 2023,
+      rating: 8.9,
+      duration: '3h 0min',
+      ageRating: '16',
+      synopsis: 'A história do físico J. Robert Oppenheimer liderando o Projeto Manhattan para desenvolver a primeira bomba atômica do mundo.',
+      posterUrl: 'https://images.unsplash.com/photo-1444703686981-a3abbc4d4fe3?auto=format&fit=crop&q=80&w=600',
+      backdropUrl: 'https://images.unsplash.com/photo-1444703686981-a3abbc4d4fe3?auto=format&fit=crop&q=80&w=1200'
+    },
+    {
+      id: 'warez_346698',
+      tmdbId: '346698',
+      imdbId: 'tt1517268',
+      title: 'Barbie',
+      type: 'movie',
+      genres: ['Comédia', 'Aventura', 'Fantasia'],
+      year: 2023,
+      rating: 7.2,
+      duration: '1h 54min',
+      ageRating: '12',
+      synopsis: 'Viver na Terra da Barbie é ser perfeito no lugar perfeito. A menos que você tenha uma crise existencial completa ou seja o Ken.',
+      posterUrl: 'https://images.unsplash.com/photo-1594744803329-e58b31de215f?auto=format&fit=crop&q=80&w=600',
+      backdropUrl: 'https://images.unsplash.com/photo-1594744803329-e58b31de215f?auto=format&fit=crop&q=80&w=1200'
+    },
+    {
+      id: 'warez_100088',
+      tmdbId: '100088',
+      imdbId: 'tt3581920',
+      title: 'The Last of Us',
+      type: 'series',
+      genres: ['Ação', 'Aventura', 'Drama', 'Ficção Científica'],
+      year: 2023,
+      rating: 8.8,
+      duration: '1 Temporada',
+      ageRating: '16',
+      synopsis: 'Joel e Ellie, uma dupla conectada pela dureza do mundo em que vivem, são forçados a suportar circunstâncias brutais em uma jornada pela América pós-pandêmica.',
+      posterUrl: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&q=80&w=600',
+      backdropUrl: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&q=80&w=1200',
+      seasonsCount: 1,
+      episodesCount: [9]
+    },
+    {
+      id: 'warez_299534',
+      tmdbId: '299534',
+      imdbId: 'tt4154900',
+      title: 'Vingadores: Ultimato',
+      type: 'movie',
+      genres: ['Ação', 'Aventura', 'Ficção Científica'],
+      year: 2019,
+      rating: 8.4,
+      duration: '3h 1min',
+      ageRating: '12',
+      synopsis: 'Após os eventos devastadores de Vingadores: Guerra Infinita, o universo está em ruínas. Com a ajuda dos aliados restantes, os Vingadores se reúnem mais uma vez para reverter as ações de Thanos.',
+      posterUrl: 'https://images.unsplash.com/photo-1569003339405-ea396a5a8a90?auto=format&fit=crop&q=80&w=600',
+      backdropUrl: 'https://images.unsplash.com/photo-1569003339405-ea396a5a8a90?auto=format&fit=crop&q=80&w=1200'
+    },
+    {
+      id: 'warez_597',
+      tmdbId: '597',
+      imdbId: 'tt0120338',
+      title: 'Titanic',
+      type: 'movie',
+      genres: ['Drama', 'Romance'],
+      year: 1997,
+      rating: 7.9,
+      duration: '3h 14min',
+      ageRating: '12',
+      synopsis: 'Uma aristocrata de dezessete anos se apaixona por um artista gentil, mas pobre, a bordo do luxuoso e desafortunado R.M.S. Titanic.',
+      posterUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&q=80&w=600',
+      backdropUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&q=80&w=1200'
+    },
+    {
+      id: 'warez_76600',
+      tmdbId: '76600',
+      imdbId: 'tt1630029',
+      title: 'Avatar: O Caminho da Água',
+      type: 'movie',
+      genres: ['Ação', 'Aventura', 'Ficção Científica'],
+      year: 2022,
+      rating: 7.6,
+      duration: '3h 12min',
+      ageRating: '12',
+      synopsis: 'Jake Sully vive com sua nova família no planeta Pandora. Uma ameaça familiar retorna para terminar o que começou, e Jake deve trabalhar com Neytiri para proteger seu lar.',
+      posterUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=600',
+      backdropUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=1200'
+    },
+    {
+      id: 'warez_98',
+      tmdbId: '98',
+      imdbId: 'tt0172495',
+      title: 'Gladiador',
+      type: 'movie',
+      genres: ['Ação', 'Drama', 'Aventura'],
+      year: 2000,
+      rating: 8.5,
+      duration: '2h 35min',
+      ageRating: '14',
+      synopsis: 'Um ex-general romano jura vingança contra o filho corrupto do imperador que assassinou sua família e o condenou à escravidão como gladiador.',
+      posterUrl: 'https://images.unsplash.com/photo-1558591710-4b4a1ae0f04d?auto=format&fit=crop&q=80&w=600',
+      backdropUrl: 'https://images.unsplash.com/photo-1558591710-4b4a1ae0f04d?auto=format&fit=crop&q=80&w=1200'
+    },
+    {
+      id: 'warez_808',
+      tmdbId: '808',
+      imdbId: 'tt0126029',
+      title: 'Shrek',
+      type: 'movie',
+      genres: ['Animação', 'Comédia', 'Fantasia'],
+      year: 2001,
+      rating: 7.9,
+      duration: '1h 30min',
+      ageRating: 'L',
+      synopsis: 'Um ogro tem sua tranquilidade invadida por personagens de contos de fadas banidos pelo malvado Lorde Farquaad. Para salvar seu lar, Shrek parte em uma missão para resgatar a bela princesa Fiona.',
+      posterUrl: 'https://images.unsplash.com/photo-1608889174637-3c44f6326f20?auto=format&fit=crop&q=80&w=600',
+      backdropUrl: 'https://images.unsplash.com/photo-1608889174637-3c44f6326f20?auto=format&fit=crop&q=80&w=1200'
+    },
+    {
+      id: 'warez_93405',
+      tmdbId: '93405',
+      imdbId: 'tt10919420',
+      title: 'Round 6',
+      type: 'series',
+      genres: ['Ação', 'Suspense', 'Drama'],
+      year: 2021,
+      rating: 8.0,
+      duration: '1 Temporada',
+      ageRating: '18',
+      synopsis: 'Centenas de jogadores com dificuldades financeiras aceitam um estranho convite para competir em jogos infantis tradicionais com consequências mortais em busca de um prêmio colossal.',
+      posterUrl: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&q=80&w=600',
+      backdropUrl: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&q=80&w=1200',
+      seasonsCount: 1,
+      episodesCount: [9]
+    },
+    {
+      id: 'warez_1402',
+      tmdbId: '1402',
+      imdbId: 'tt1520265',
+      title: 'The Walking Dead',
+      type: 'series',
+      genres: ['Drama', 'Ação', 'Ficção Científica'],
+      year: 2010,
+      rating: 8.5,
+      duration: '11 Temporadas',
+      ageRating: '16',
+      synopsis: 'Um grupo de sobreviventes liderado pelo xerife Rick Grimes atravessa os Estados Unidos procurando abrigo em um mundo infestado de mortos-vivos.',
+      posterUrl: 'https://images.unsplash.com/photo-1509248961158-e54f6934749c?auto=format&fit=crop&q=80&w=600',
+      backdropUrl: 'https://images.unsplash.com/photo-1509248961158-e54f6934749c?auto=format&fit=crop&q=80&w=1200',
+      seasonsCount: 11,
+      episodesCount: [6, 13, 16, 16, 16, 16, 16, 16, 16, 22, 24]
+    },
+    {
+      id: 'warez_71446',
+      tmdbId: '71446',
+      imdbId: 'tt6468322',
+      title: 'La Casa de Papel',
+      type: 'series',
+      genres: ['Ação', 'Drama', 'Crime'],
+      year: 2017,
+      rating: 8.2,
+      duration: '5 Partes',
+      ageRating: '16',
+      synopsis: 'Um grupo altamente qualificado de assaltantes executa o assalto planejado mais complexo do século na Casa da Moeda da Espanha, coordenado pelo enigmático "Professor".',
+      posterUrl: 'https://images.unsplash.com/photo-1501430654243-c934ccd2c190?auto=format&fit=crop&q=80&w=600',
+      backdropUrl: 'https://images.unsplash.com/photo-1501430654243-c934ccd2c190?auto=format&fit=crop&q=80&w=1200',
+      seasonsCount: 5,
+      episodesCount: [9, 6, 8, 8, 10]
     }
   ];
 
-  if (!process.env.GEMINI_API_KEY) {
-    const filtered = backupDb.filter(item => 
-      item.title.toLowerCase().includes(qLower) || 
-      item.genres.some(g => g.toLowerCase().includes(qLower))
-    );
-    return res.json(filtered.length > 0 ? filtered : backupDb);
-  }
+  // Accent-insensitive local search on rich database
+  const qClean = qLower.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const filtered = backupDb.filter(item => {
+    const titleClean = item.title.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const synopsisClean = item.synopsis.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const genresClean = item.genres.map(g => g.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
 
-  try {
-    const prompt = `Você é o mecanismo de busca inteligente do CinePlay para o WarezCDN.
-Busque de 4 a 6 filmes ou séries do mundo real que se assemelham à busca do usuário: "${query}".
-Se a busca for muito específica, retorne essa obra de forma exata na lista, mais obras similares.
-Cada item DEVE conter o ID real do TMDB no campo 'tmdbId' (isto é crítico para podermos reproduzir o player de vídeo!).
-Cada item DEVE também conter o ID real do IMDb no campo 'imdbId' (começando com "tt", ex: "tt0133093" para Matrix ou "tt2543044" para A Chegada). Isso é crítico para os servidores de filmes!
-Sempre retorne caminhos válidos de imagens de posters e backdrops reais do TMDB (usando caminhos do tipo https://image.tmdb.org/t/p/w500/caminho.jpg) ou URLs de imagens realistas do Unsplash relacionadas aos temas.
-Retorne um array JSON em português com a seguinte estrutura:`;
+    return titleClean.includes(qClean) || 
+           synopsisClean.includes(qClean) ||
+           genresClean.some(g => g.includes(qClean)) ||
+           item.year.toString().includes(qClean);
+  });
 
-    const response = await generateContentWithRetryAndFallback({
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              tmdbId: { type: Type.STRING, description: 'ID TMDB real da obra (Ex: "603" para Matrix).' },
-              imdbId: { type: Type.STRING, description: 'ID IMDb real da obra (Ex: "tt0133093" para Matrix ou "tt2543044" para A Chegada).' },
-              title: { type: Type.STRING, description: 'Título oficial em português brasileiro.' },
-              type: { type: Type.STRING, description: 'Deve ser exatamente "movie" ou "series".' },
-              genres: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'Lista de gêneros principais.' },
-              year: { type: Type.INTEGER, description: 'Ano de lançamento.' },
-              rating: { type: Type.NUMBER, description: 'Classificação IMDb/TMDB média (ex: 8.5).' },
-              duration: { type: Type.STRING, description: 'Duração aproximada (ex: "2h 10min" ou "3 Temporadas").' },
-              ageRating: { type: Type.STRING, description: 'Classificação de idade brasileira (L, 10, 12, 14, 16, 18).' },
-              synopsis: { type: Type.STRING, description: 'Sinopse envolvente em português.' },
-              posterUrl: { type: Type.STRING, description: 'Capa vertical. URL de imagem TMDB real ou Unsplash.' },
-              backdropUrl: { type: Type.STRING, description: 'Wallpaper horizontal. URL de imagem TMDB real ou Unsplash.' },
-              seasonsCount: { type: Type.INTEGER, description: 'Se for série, o número total de temporadas.' },
-              episodesCount: { type: Type.ARRAY, items: { type: Type.INTEGER }, description: 'Se for série, lista de número de episódios por temporada.' }
-            },
-            required: ['tmdbId', 'imdbId', 'title', 'type', 'genres', 'year', 'rating', 'duration', 'ageRating', 'synopsis', 'posterUrl', 'backdropUrl']
-          }
-        }
-      }
-    });
-
-    const results = JSON.parse(response.text || '[]');
-    const enrichedResults = results.map((item: any, idx: number) => ({
-      ...item,
-      id: `warez_${item.tmdbId || idx}`,
-      seasonsCount: item.seasonsCount || (item.type === 'series' ? 1 : undefined),
-      episodesCount: item.episodesCount || (item.type === 'series' ? [10] : undefined)
-    }));
-
-    res.json(enrichedResults);
-  } catch (err: any) {
-    console.warn('[Warez Search Endpoint Error] Using fallback due to error:', err.message || err);
-    // Intelligent fallback matching
-    const filteredBackup = backupDb.filter(item => 
-      item.title.toLowerCase().includes(qLower) || 
-      item.genres.some(g => g.toLowerCase().includes(qLower))
-    );
-    res.json(filteredBackup.length > 0 ? filteredBackup : backupDb);
-  }
+  // Return filtered matches if found; otherwise, return the whole robust list so they always see options
+  return res.json(filtered.length > 0 ? filtered : backupDb);
 });
 
 // ================= IPTV PLAYLIST LOADER & PARSER =================

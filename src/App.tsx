@@ -11,7 +11,7 @@ import LiveTvPlayer from './components/LiveTvPlayer';
 
 export default function App() {
   // Navigation
-  const [activeTab, setActiveTab] = useState<'home' | 'movies' | 'series' | 'tv' | 'ai-chat' | 'concept-lab' | 'watchlist' | 'warez'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'movies' | 'series' | 'tv' | 'ai-chat' | 'watchlist' | 'warez'>('home');
   
   // Search and Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -384,7 +384,6 @@ export default function App() {
               { id: 'series', label: 'Séries', icon: Layers },
               { id: 'tv', label: 'Canais TV', icon: Tv },
               { id: 'ai-chat', label: 'CineAI Coach', icon: Sparkles },
-              { id: 'concept-lab', label: 'Gerador CineAI', icon: Video },
               { id: 'watchlist', label: 'Minha Lista', icon: Heart },
               { id: 'warez', label: 'Busca Warez', icon: Search }
             ].map(tab => {
@@ -452,7 +451,6 @@ export default function App() {
             { id: 'series', label: 'Séries' },
             { id: 'tv', label: 'TV Ao Vivo' },
             { id: 'ai-chat', label: 'CineAI Coach' },
-            { id: 'concept-lab', label: 'Gerador' },
             { id: 'watchlist', label: 'Minha Lista' },
             { id: 'warez', label: 'Busca Warez' }
           ].map(tab => (
@@ -1126,161 +1124,6 @@ export default function App() {
               currentWatchlist={watchlist} 
               onPlayContent={(c) => setActiveVideo({ content: c })} 
             />
-          </div>
-        )}
-
-
-        {/* ================= CINEAI CONCEPT LAB TAB ================= */}
-        {activeTab === 'concept-lab' && (
-          <div id="concept-lab-view" className="space-y-8">
-            <div className="border-b border-zinc-900 pb-5">
-              <h1 className="text-2xl md:text-3xl font-black text-white flex items-center">
-                <Video className="text-red-500 mr-3 animate-pulse" />
-                Laboratório de Ideias CineAI
-              </h1>
-              <p className="text-sm text-gray-400">Combine gêneros inusitados e crie conceitos malucos de filmes do zero! Nossa IA fará o roteiro inicial do poster.</p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              
-              {/* Creator Inputs card */}
-              <div className="bg-zinc-900/40 border border-zinc-900 rounded-3xl p-6 md:p-8 space-y-6">
-                <div className="flex items-center space-x-3 text-red-500">
-                  <Sparkles size={20} />
-                  <h3 className="font-bold text-sm uppercase tracking-wider">Configure o Coquetel de Gêneros</h3>
-                </div>
-
-                {/* Genre selectors */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs text-gray-400 font-semibold">Gênero Primário</label>
-                    <select
-                      value={genre1}
-                      onChange={(e) => setGenre1(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-red-600"
-                    >
-                      {['Ficção Científica', 'Terror', 'Comédia', 'Ação', 'Romance', 'Documentário', 'Fantasia', 'Musical'].map(g => (
-                        <option key={g} value={g}>{g}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs text-gray-400 font-semibold">Gênero Secundário</label>
-                    <select
-                      value={genre2}
-                      onChange={(e) => setGenre2(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-red-600"
-                    >
-                      {['Comédia', 'Ficção Científica', 'Terror', 'Ação', 'Romance', 'Suspense', 'Drama', 'Musical'].map(g => (
-                        <option key={g} value={g}>{g}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Text Concept */}
-                <div className="space-y-1.5">
-                  <label className="text-xs text-gray-400 font-semibold">Descreva o protagonista ou a ideia base (Opcional)</label>
-                  <textarea
-                    rows={4}
-                    value={userConcept}
-                    onChange={(e) => setUserConcept(e.target.value)}
-                    placeholder="Ex: Um robô aposentado que sonha em vencer o concurso nacional de sapateado em São Paulo."
-                    className="w-full bg-zinc-950 border border-zinc-850 rounded-xl p-3.5 text-sm text-white focus:outline-none focus:border-red-600 placeholder-zinc-600"
-                  />
-                </div>
-
-                <button
-                  id="btn-generate-fictional"
-                  onClick={generateFictionalMovie}
-                  disabled={isGeneratingConcept}
-                  className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-extrabold text-sm py-4 rounded-xl flex items-center justify-center space-x-2.5 shadow-lg shadow-red-950/20 active:scale-95 transition duration-150 cursor-pointer disabled:opacity-50"
-                >
-                  <Sparkle size={16} className={isGeneratingConcept ? 'animate-spin' : ''} />
-                  <span>{isGeneratingConcept ? 'Fundindo Átomos de Roteiro...' : 'Gerar Conceito Exclusivo'}</span>
-                </button>
-
-                {conceptError && (
-                  <p className="text-xs text-amber-500 font-medium">⚠️ {conceptError}</p>
-                )}
-              </div>
-
-              {/* Fictional Poster output area */}
-              <div className="flex flex-col justify-center">
-                {generatedConcept ? (
-                  <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border-2 border-red-600/30 rounded-3xl p-6 md:p-8 space-y-6 shadow-2xl relative overflow-hidden">
-                    
-                    {/* Glowing particle dots in output background */}
-                    <div className="absolute top-0 right-0 h-32 w-32 bg-red-600/10 rounded-full filter blur-2xl pointer-events-none" />
-
-                    <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
-                      <span className="text-[10px] bg-red-600 text-white px-2.5 py-1 rounded-full uppercase tracking-widest font-black">CINEAI ORIGINAL CONCEPT</span>
-                      <span className="text-xs text-gray-400 font-mono">📅 Lançamento: 2028</span>
-                    </div>
-
-                    <div className="space-y-2">
-                      <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight leading-tight uppercase bg-gradient-to-r from-white to-red-400 bg-clip-text text-transparent">
-                        {generatedConcept.title}
-                      </h2>
-                      <div className="flex space-x-2">
-                        <span className="text-[10px] bg-zinc-950 text-red-400 px-2.5 py-0.5 rounded border border-red-500/20 font-bold uppercase">{genre1}</span>
-                        <span className="text-[10px] bg-zinc-950 text-red-400 px-2.5 py-0.5 rounded border border-red-500/20 font-bold uppercase">{genre2}</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <span className="text-xs text-zinc-500 font-semibold uppercase tracking-wider block">Sinopse da Obra</span>
-                      <p className="text-sm text-zinc-300 leading-relaxed bg-zinc-950/60 p-4 rounded-xl border border-zinc-900 italic">
-                        "{generatedConcept.synopsis}"
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                      <div>
-                        <span className="text-xs text-zinc-500 font-semibold uppercase tracking-wider block mb-1">Elenco dos Sonhos</span>
-                        <div className="flex flex-wrap gap-1">
-                          {generatedConcept.dreamCast.map((actor, idx) => (
-                            <span key={idx} className="text-xs bg-zinc-900 border border-zinc-850 text-zinc-300 px-2 py-1 rounded-md">
-                              🎬 {actor}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <span className="text-xs text-zinc-500 font-semibold uppercase tracking-wider block mb-1">Expectativa de Bilheteria</span>
-                        <span className="text-sm font-bold text-yellow-500 block">
-                          🚀 {generatedConcept.boxOfficeEstimate}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="pt-4 border-t border-zinc-850 flex items-center justify-between text-xs text-gray-500">
-                      <span>Prototipado em tempo real por Gemini 3.5</span>
-                      <button 
-                        onClick={() => setUserConcept('')}
-                        className="text-red-500 font-semibold hover:underline"
-                      >
-                        Criar Outro
-                      </button>
-                    </div>
-
-                  </div>
-                ) : (
-                  <div className="p-12 border-2 border-dashed border-zinc-800 bg-zinc-950 rounded-3xl text-center space-y-4">
-                    <div className="h-14 w-14 bg-zinc-900 rounded-full flex items-center justify-center text-zinc-600 mx-auto">
-                      <HelpCircle size={28} />
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="text-sm font-bold text-white">Nenhum Conceito Ativo</h4>
-                      <p className="text-xs text-gray-500 max-w-sm mx-auto">Insira uma ideia ou misture gêneros ao lado para ver o poster inteligente com roteiro criado na hora por nossa Inteligência Artificial.</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-            </div>
           </div>
         )}
 
