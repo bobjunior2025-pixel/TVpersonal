@@ -1065,7 +1065,7 @@ export default function App() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Backdrop image */}
-            <div className="relative aspect-[21/9] w-full shrink-0 bg-zinc-900">
+            <div className="relative h-44 sm:h-56 md:h-64 lg:h-72 w-full shrink-0 bg-zinc-900">
               <img
                 src={selectedWarezContent.backdropUrl}
                 alt={selectedWarezContent.title}
@@ -1108,23 +1108,28 @@ export default function App() {
                 switch (embedSource) {
                   case 'servidor_1':
                     embedUrl = type === 'movie'
+                      ? `https://${warezDomain}/filme/${tmdbId}`
+                      : `https://${warezDomain}/serie/${tmdbId}/${s}/${e}`;
+                    break;
+                  case 'servidor_2':
+                    embedUrl = type === 'movie'
                       ? `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1`
                       : `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1&s=${s}&e=${e}`;
                     break;
-                  case 'servidor_2':
+                  case 'servidor_3':
                     embedUrl = type === 'movie'
                       ? `https://vidsrc.xyz/embed/movie/${tmdbId}`
                       : `https://vidsrc.xyz/embed/tv/${tmdbId}/${s}/${e}`;
                     break;
-                  case 'servidor_3':
+                  case 'servidor_4':
                     embedUrl = type === 'movie'
                       ? `https://vidsrc.to/embed/movie/${tmdbId}`
                       : `https://vidsrc.to/embed/tv/${tmdbId}/${s}/${e}`;
                     break;
                   default:
                     embedUrl = type === 'movie'
-                      ? `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1`
-                      : `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1&s=${s}&e=${e}`;
+                      ? `https://${warezDomain}/filme/${tmdbId}`
+                      : `https://${warezDomain}/serie/${tmdbId}/${s}/${e}`;
                     break;
                 }
 
@@ -1174,30 +1179,38 @@ export default function App() {
                     {/* Servers Sources Row */}
                     <div className="p-4 bg-zinc-900/40 rounded-xl border border-zinc-850 space-y-3">
                       <p className="text-[10px] font-mono text-zinc-400 uppercase font-black">SERVIDOR ATIVO:</p>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
                         <button
                           onClick={() => setEmbedSource('servidor_1')}
-                          className={`px-3 py-1.5 rounded-lg border text-[11px] font-bold transition ${
-                            embedSource === 'servidor_1' ? 'bg-amber-500 text-black border-amber-500' : 'bg-zinc-950 text-zinc-400 border-zinc-850'
+                          className={`px-3 py-2 rounded-lg border text-[11px] font-bold transition text-left sm:text-center ${
+                            embedSource === 'servidor_1' ? 'bg-amber-500 text-black border-amber-500' : 'bg-zinc-950 text-zinc-400 border-zinc-850 hover:bg-zinc-900'
                           }`}
                         >
-                          Servidor 1
+                          🇧🇷 Servidor 1 (Dublado)
                         </button>
                         <button
                           onClick={() => setEmbedSource('servidor_2')}
-                          className={`px-3 py-1.5 rounded-lg border text-[11px] font-bold transition ${
-                            embedSource === 'servidor_2' ? 'bg-amber-500 text-black border-amber-500' : 'bg-zinc-950 text-zinc-400 border-zinc-850'
+                          className={`px-3 py-2 rounded-lg border text-[11px] font-bold transition text-left sm:text-center ${
+                            embedSource === 'servidor_2' ? 'bg-amber-500 text-black border-amber-500' : 'bg-zinc-950 text-zinc-400 border-zinc-850 hover:bg-zinc-900'
                           }`}
                         >
-                          Servidor 2
+                          🌐 Servidor 2 (Multi-Áudio)
                         </button>
                         <button
                           onClick={() => setEmbedSource('servidor_3')}
-                          className={`px-3 py-1.5 rounded-lg border text-[11px] font-bold transition ${
-                            embedSource === 'servidor_3' ? 'bg-amber-500 text-black border-amber-500' : 'bg-zinc-950 text-zinc-400 border-zinc-850'
+                          className={`px-3 py-2 rounded-lg border text-[11px] font-bold transition text-left sm:text-center ${
+                            embedSource === 'servidor_3' ? 'bg-amber-500 text-black border-amber-500' : 'bg-zinc-950 text-zinc-400 border-zinc-850 hover:bg-zinc-900'
                           }`}
                         >
-                          Servidor 3
+                          🇺🇸 Servidor 3 (Original)
+                        </button>
+                        <button
+                          onClick={() => setEmbedSource('servidor_4')}
+                          className={`px-3 py-2 rounded-lg border text-[11px] font-bold transition text-left sm:text-center ${
+                            embedSource === 'servidor_4' ? 'bg-amber-500 text-black border-amber-500' : 'bg-zinc-950 text-zinc-400 border-zinc-850 hover:bg-zinc-900'
+                          }`}
+                        >
+                          🇺🇸 Servidor 4 (VidSrc TO)
                         </button>
                       </div>
                     </div>
@@ -1207,7 +1220,7 @@ export default function App() {
                 <div className="grid md:grid-cols-3 gap-6">
                   
                   {/* Left poster */}
-                  <div className="shrink-0 aspect-[2/3] w-full md:w-48 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-850 shadow-xl self-start">
+                  <div className="hidden md:block shrink-0 aspect-[2/3] md:w-48 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-850 shadow-xl self-start">
                     <img
                       src={selectedWarezContent.posterUrl}
                       alt={selectedWarezContent.title}
