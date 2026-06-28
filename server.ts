@@ -749,7 +749,85 @@ interface IPTVChannel {
   ticker: string[];
 }
 
-let cachedChannels: IPTVChannel[] = [];
+const defaultChannels: IPTVChannel[] = [
+  {
+    id: 'tv_sbt',
+    name: 'SBT HD (Nacional)',
+    logo: 'https://images.unsplash.com/photo-1598257006458-087169a1f08d?auto=format&fit=crop&q=80&w=120',
+    videoUrl: 'https://sbt-central-live.akamaized.net/hls/live/2012016/central/master.m3u8',
+    category: 'Geral',
+    country: 'BR',
+    nowPlaying: 'Programação de Variedades e Novelas',
+    nextShow: 'SBT Brasil Especial (20:30)',
+    ticker: [
+      'ASSISTA AO VIVO: Programação oficial aberta do SBT',
+      'Novidades na grade: Novas séries e transmissões de torneios esportivos confirmados',
+      'Seja bem-vindo à experiência de streaming CINEPLAY 100% Real!'
+    ]
+  },
+  {
+    id: 'tv_record_news',
+    name: 'Record News (Notícias ao Vivo)',
+    logo: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&q=80&w=120',
+    videoUrl: 'https://recordnews-r7-aws.sambatech.com.br/live/smil:rn.smil/playlist.m3u8',
+    category: 'Notícias',
+    country: 'BR',
+    nowPlaying: 'Jornal Record News: Economia e Política',
+    nextShow: 'Hora News (21:30)',
+    ticker: [
+      'RECORD NEWS: As principais manchetes do Brasil e do mundo com cobertura 24h',
+      'Mercado financeiro fecha em alta de 1.25% nesta última sessão de negócios',
+      'CINEPLAY: Assista canais reais em qualquer tela sem lag ou interrupções.'
+    ]
+  },
+  {
+    id: 'tv_brasil',
+    name: 'TV Brasil (Nacional e Cultura)',
+    logo: 'https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?auto=format&fit=crop&q=80&w=120',
+    videoUrl: 'https://ebctvlive3.ebc.com.br/hls/tvbrasil1.m3u8',
+    category: 'Documentários',
+    country: 'BR',
+    nowPlaying: 'Brasil Documental: Pantanal Selvagem',
+    nextShow: 'Repórter Brasil Noite (21:00)',
+    ticker: [
+      'TV BRASIL: Transmissão oficial de utilidade pública e cultura nacional',
+      'Turismo: Parques nacionais registram aumento de 20% no número de visitantes',
+      'Siga CINEPLAY para novas atualizações e mais canais liberados em tempo recorde!'
+    ]
+  },
+  {
+    id: 'tv_cultura',
+    name: 'TV Cultura (Cultura e Educação)',
+    logo: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&q=80&w=120',
+    videoUrl: 'https://stream.tvcultura.com.br/cultura/live/playlist.m3u8',
+    category: 'Documentários',
+    country: 'BR',
+    nowPlaying: 'Roda Viva: Entrevistas Históricas',
+    nextShow: 'Metrópolis (22:15)',
+    ticker: [
+      'TV CULTURA: Uma das melhores emissoras de educação e arte do planeta',
+      'Agenda Cultural: Exposições imperdíveis de arte contemporânea em cartaz',
+      'Assista aos desenhos clássicos e debates com qualidade HD garantida.'
+    ]
+  },
+  {
+    id: 'tv_jovem_pan',
+    name: 'Jovem Pan News (Debates e Opinião)',
+    logo: 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&q=80&w=120',
+    videoUrl: 'https://live-jpn.jovempan.com.br/hls/live.m3u8',
+    category: 'Notícias',
+    country: 'BR',
+    nowPlaying: 'Os Pingos nos Is (Opinião)',
+    nextShow: 'Jornal da Manhã - Edição Resumo (22:00)',
+    ticker: [
+      'JOVEM PAN NEWS: Transmissão oficial ao vivo com debates acalorados sobre política',
+      'Previsão do Tempo: Frente fria avança na região Sul e causa pancadas de chuva',
+      'Interatividade total: Mande sua pergunta usando a hashtag do programa oficial.'
+    ]
+  }
+];
+
+let cachedChannels: IPTVChannel[] = [...defaultChannels];
 let isFetchingIPTV = false;
 let iptvError = '';
 
@@ -913,98 +991,14 @@ async function fetchIPTVChannels() {
 
 // REST endpoints for TV Channels
 app.get('/api/iptv/channels', async (req, res) => {
-  if (cachedChannels.length === 0 && !isFetchingIPTV) {
-    const fetchPromise = fetchIPTVChannels();
-    // Wait up to 3 seconds for the initial load, if slow we'll fall back or respond later
-    await Promise.race([
-      fetchPromise,
-      new Promise(resolve => setTimeout(resolve, 3000))
-    ]);
+  // If we only have the default channels and aren't fetching, and we are NOT on Vercel,
+  // we can fire off a background fetch to populate the rest of the playlist.
+  if (cachedChannels.length === defaultChannels.length && !isFetchingIPTV && !process.env.VERCEL) {
+    fetchIPTVChannels().catch(err => console.error('Background IPTV loading error:', err));
   }
 
   const { country, category, search, limit = '60', offset = '0' } = req.query;
   let result = [...cachedChannels];
-
-  // Fallback high-quality channels if cache is empty or network fetch failed
-  if (result.length === 0) {
-    result = [
-      {
-        id: 'tv_sbt',
-        name: 'SBT HD (Nacional)',
-        logo: 'https://images.unsplash.com/photo-1598257006458-087169a1f08d?auto=format&fit=crop&q=80&w=120',
-        videoUrl: 'https://sbt-central-live.akamaized.net/hls/live/2012016/central/master.m3u8',
-        category: 'Geral',
-        country: 'BR',
-        nowPlaying: 'Programação de Variedades e Novelas',
-        nextShow: 'SBT Brasil Especial (20:30)',
-        ticker: [
-          'ASSISTA AO VIVO: Programação oficial aberta do SBT',
-          'Novidades na grade: Novas séries e transmissões de torneios esportivos confirmados',
-          'Seja bem-vindo à experiência de streaming CINEPLAY 100% Real!'
-        ]
-      },
-      {
-        id: 'tv_record_news',
-        name: 'Record News (Notícias ao Vivo)',
-        logo: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&q=80&w=120',
-        videoUrl: 'https://recordnews-r7-aws.sambatech.com.br/live/smil:rn.smil/playlist.m3u8',
-        category: 'Notícias',
-        country: 'BR',
-        nowPlaying: 'Jornal Record News: Economia e Política',
-        nextShow: 'Hora News (21:30)',
-        ticker: [
-          'RECORD NEWS: As principais manchetes do Brasil e do mundo com cobertura 24h',
-          'Mercado financeiro fecha em alta de 1.25% nesta última sessão de negócios',
-          'CINEPLAY: Assista canais reais em qualquer tela sem lag ou interrupções.'
-        ]
-      },
-      {
-        id: 'tv_brasil',
-        name: 'TV Brasil (Nacional e Cultura)',
-        logo: 'https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?auto=format&fit=crop&q=80&w=120',
-        videoUrl: 'https://ebctvlive3.ebc.com.br/hls/tvbrasil1.m3u8',
-        category: 'Documentários',
-        country: 'BR',
-        nowPlaying: 'Brasil Documental: Pantanal Selvagem',
-        nextShow: 'Repórter Brasil Noite (21:00)',
-        ticker: [
-          'TV BRASIL: Transmissão oficial de utilidade pública e cultura nacional',
-          'Turismo: Parques nacionais registram aumento de 20% no número de visitantes',
-          'Siga CINEPLAY para novas atualizações e mais canais liberados em tempo recorde!'
-        ]
-      },
-      {
-        id: 'tv_cultura',
-        name: 'TV Cultura (Cultura e Educação)',
-        logo: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&q=80&w=120',
-        videoUrl: 'https://stream.tvcultura.com.br/cultura/live/playlist.m3u8',
-        category: 'Documentários',
-        country: 'BR',
-        nowPlaying: 'Roda Viva: Entrevistas Históricas',
-        nextShow: 'Metrópolis (22:15)',
-        ticker: [
-          'TV CULTURA: Uma das melhores emissoras de educação e arte do planeta',
-          'Agenda Cultural: Exposições imperdíveis de arte contemporânea em cartaz',
-          'Assista aos desenhos clássicos e debates com qualidade HD garantida.'
-        ]
-      },
-      {
-        id: 'tv_jovem_pan',
-        name: 'Jovem Pan News (Debates e Opinião)',
-        logo: 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&q=80&w=120',
-        videoUrl: 'https://live-jpn.jovempan.com.br/hls/live.m3u8',
-        category: 'Notícias',
-        country: 'BR',
-        nowPlaying: 'Os Pingos nos Is (Opinião)',
-        nextShow: 'Jornal da Manhã - Edição Resumo (22:00)',
-        ticker: [
-          'JOVEM PAN NEWS: Transmissão oficial ao vivo com debates acalorados sobre política',
-          'Previsão do Tempo: Frente fria avança na região Sul e causa pancadas de chuva',
-          'Interatividade total: Mande sua pergunta usando a hashtag do programa oficial.'
-        ]
-      }
-    ];
-  }
 
   // Filters
   if (country) {
@@ -1026,7 +1020,7 @@ app.get('/api/iptv/channels', async (req, res) => {
   }
 
   // Extraction of unique metadata for filters (using the full cache)
-  const fullSource = cachedChannels.length > 0 ? cachedChannels : result;
+  const fullSource = cachedChannels;
   const countries = Array.from(new Set(fullSource.map(ch => ch.country).filter(Boolean))).sort();
   const categories = Array.from(new Set(fullSource.map(ch => ch.category).filter(Boolean))).sort();
 
@@ -1034,7 +1028,9 @@ app.get('/api/iptv/channels', async (req, res) => {
   const parsedOffset = parseInt(String(offset), 10) || 0;
 
   const total = result.length;
-  const paginatedResult = result.slice(parsedOffset, parsedOffset + parsedLimit);
+  const paginatedResult = Math.min(parsedOffset, total) >= total 
+    ? [] 
+    : result.slice(parsedOffset, parsedOffset + parsedLimit);
 
   res.json({
     channels: paginatedResult,
@@ -1179,4 +1175,10 @@ async function startServer() {
   });
 }
 
-startServer();
+// Export app for serverless platforms like Vercel
+export { app };
+
+// Only start standalone express server if NOT running on Vercel (serverless environment)
+if (!process.env.VERCEL) {
+  startServer();
+}
