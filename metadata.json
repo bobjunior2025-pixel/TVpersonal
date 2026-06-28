@@ -1,6 +1,6 @@
 {
-  "name": "Plataforma de Filmes, Séries e TV",
-  "description": "Uma plataforma completa para assistir filmes, séries e canais de TV ao vivo com um assistente virtual CineAI integrado para recomendações personalizadas e curiosidades.",
+  "name": "MegaCine",
+  "description": "Uma plataforma completa de canais ao vivo, filmes, séries, anime e entretenimento sob demanda otimizada para todas as telas.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

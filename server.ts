@@ -1,362 +1,39 @@
 import express from 'express';
 import path from 'path';
 import dotenv from 'dotenv';
-import { GoogleGenAI, Type } from '@google/genai';
 
 dotenv.config();
 
 const app = express();
 app.use(express.json());
 
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-// Lazy initialization of GoogleGenAI to prevent crashing if GEMINI_API_KEY is not set
-let aiClient: GoogleGenAI | null = null;
-function getGenAI(): GoogleGenAI {
-  if (!aiClient) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    aiClient = new GoogleGenAI({
-      apiKey: apiKey || '',
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        }
-      }
-    });
-  }
-  return aiClient;
-}
 
-async function generateContentWithRetryAndFallback(params: {
-  contents: string;
-  config?: any;
-}, maxRetriesPerModel = 2): Promise<any> {
-  const ai = getGenAI();
-  const models = ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-flash-latest'];
-  let lastError: any = null;
 
-  for (const model of models) {
-    for (let attempt = 1; attempt <= maxRetriesPerModel; attempt++) {
-      try {
-        console.log(`[CineAI API] Requesting model "${model}" - Attempt ${attempt}/${maxRetriesPerModel}`);
-        const response = await ai.models.generateContent({
-          model: model,
-          contents: params.contents,
-          config: params.config
-        });
-        return response;
-      } catch (err: any) {
-        lastError = err;
-        const msg = err.message || '';
-        console.log(`[CineAI API Info] Model "${model}" response status on try ${attempt}: ${msg}`);
-        
-        // Wait briefly before retrying (exponential backoff)
-        if (attempt < maxRetriesPerModel) {
-          const delay = attempt * 800;
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-      }
-    }
-  }
 
-  throw lastError;
-}
 
-// Check if Gemini API key exists
-app.get('/api/cineai/status', (req, res) => {
-  const hasKey = !!process.env.GEMINI_API_KEY;
-  res.json({ status: 'ok', hasKey });
-});
 
-// Fallback helper for Trivia
-function getFallbackTrivia(title: string, type: string) {
-  const titleLower = (title || '').toLowerCase();
-  
-  if (titleLower.includes('tears of steel') || titleLower.includes('estelar')) {
-    return {
-      trivia: 'Estelar: Tears of Steel foi filmado em Amsterdã usando equipamentos de cinema de última geração. O filme foi lançado como um projeto de código aberto pela Blender Foundation para demonstrar técnicas revolucionárias de efeitos visuais e rastreamento de câmera em 3D!',
-      famousQuote: '“Há dez anos, você me deixou por causa do seu robô. Agora eu voltei para destruir tudo o que você ama.” — Celia',
-      parentalGuidance: 'Classificação 12 Anos. Contém batalhas intensas de ficção científica com robôs e algumas cenas de ação empolgantes.',
-      criticalConsensus: 'Aclamado pela crítica de efeitos visuais por demonstrar que produções de alto nível com qualidade de Hollywood podem ser alcançadas usando software livre. A performance dramática e os cenários históricos integrados com ficção científica futurista são excepcionais.'
-    };
-  }
-  
-  if (titleLower.includes('sintel')) {
-    return {
-      trivia: 'Sintel é um curta de animação de altíssima qualidade produzido pela Blender Foundation. O nome "Sintel" vem de uma palavra em holandês que significa "brasa" ou "cinza", simbolizando a jornada emocionante e as descobertas da protagonista.',
-      famousQuote: '“Eu irei até o fim da terra para te salvar dos gigantes de fogo.” — Sintel',
-      parentalGuidance: 'Classificação 10 Anos. Contém lutas estilizadas com criaturas místicas e momentos de tensão dramática.',
-      criticalConsensus: 'Uma obra-prima da animação aberta que se destaca por sua trilha sonora orquestral arrebatadora e pelo design visual expressivo dos personagens, proporcionando uma das narrativas mais comoventes já criadas.'
-    };
-  }
-  
-  if (titleLower.includes('bunny') || titleLower.includes('coelho') || titleLower.includes('buck')) {
-    return {
-      trivia: 'Big Buck Bunny é inspirado nos melhores cartoons clássicos, como os curtas do Papa-Léguas e do Tom e Jerry. O modelo 3D do coelho gigante tem milhares de partículas de pelos individuais simuladas digitalmente de forma ultra-realista.',
-      famousQuote: '“O jogo começou. Preparem-se para as armadilhas de mola!” — Coelho Bunny',
-      parentalGuidance: 'Classificação Livre. Muita comédia física (slapstick) divertida indicada para todas as idades.',
-      criticalConsensus: 'Super divertido e visualmente encantador. A comédia física clássica foi executada com extrema fluidez e timing cômico impecável, agradando crianças e adultos.'
-    };
-  }
-  
-  if (titleLower.includes('astronauta')) {
-    return {
-      trivia: 'A série conta com imagens de satélites e gravações de alta fidelidade fornecidas por astronautas a bordo da ISS, com áudios de comunicação por rádio totalmente restaurados digitalmente de arquivos históricos da NASA.',
-      famousQuote: '“A aceleração é brutal! Sinto meu peito esmagado pela força G.” — Astronauta',
-      parentalGuidance: 'Classificação Livre. Educativo e inspirador para todos os públicos interessados em ciência e astronomia.',
-      criticalConsensus: 'Um documentário imersivo que traz um realismo incomparável ao cotidiano no espaço, considerado um dos melhores materiais educativos recentes sobre a sobrevivência humana em órbita.'
-    };
-  }
-  
-  if (titleLower.includes('laundromat')) {
-    return {
-      trivia: 'Cosmos Laundromat levou mais de um ano para ser concluído e utiliza técnicas de renderização volumétrica super avançadas para simular a lã realista da ovelha Franck e os redemoinhos psicodélicos de fumaça cósmica.',
-      famousQuote: '“Coloque esta moeda na máquina de lavar cósmica e veja sua vida mudar!” — Victor',
-      parentalGuidance: 'Classificação 14 Anos. Apresenta dilemas existenciais maduros e atmosferas levemente surrealistas de ficção científica.',
-      criticalConsensus: 'Aclamado em festivais internacionais pela sua originalidade absurda e humor surrealista. Uma experiência psicodélica inesquecível de altíssimo nível artístico.'
-    };
-  }
 
-  // Fallback default
-  return {
-    trivia: `Você sabia? Este excelente ${type === 'movie' ? 'filme' : 'seriado'} conta com uma equipe técnica premiada internacionalmente e foi filmado usando lentes anamórficas vintage para criar aquela atmosfera cinematográfica clássica!`,
-    famousQuote: '“O impossível é apenas um horizonte que ainda não exploramos por completo.”',
-    parentalGuidance: 'Indicado para toda a família! Contém temas de superação, cooperação e belas lições morais.',
-    criticalConsensus: 'Aclamado pelo público local e considerado uma joia da produção contemporânea. Destaque para a cinematografia magnífica e trilha sonora imersiva.'
-  };
-}
 
-// Fallback helper for Custom Concepts
-function getFallbackConcept(genre1: string, genre2: string, concept: string) {
-  const defaultTitles = [
-    `A Vingança do Destino: ${genre1} e ${genre2}`,
-    `Operação Conexão: O Eclipse de ${genre1}`,
-    `O Último ${genre1} da Terra: Sobrevivendo em ${genre2}`,
-    `Crônicas do Caos: ${genre1} Reverso`
-  ];
-  const title = defaultTitles[Math.floor(Math.random() * defaultTitles.length)];
 
-  const synopsis = concept 
-    ? `Em um universo alternativo espetacular, a ideia base do usuário ganha vida de forma épica: "${concept}". Nesse cenário híbrido que mistura perfeitamente os elementos de ${genre1} com a intensidade de ${genre2}, os heróis mais inusitados do planeta precisam se unir para combater uma anomalia temporal que ameaça reescrever todo o espaço-tempo da sétima arte!`
-    : `Uma fusão lendária de ${genre1} com ${genre2}. Quando forças cósmicas incompatíveis colidem após o colapso de um acelerador de partículas, a realidade começa a se fragmentar, forçando heróis improváveis a embarcarem em uma jornada sem volta para salvar a última sala de cinema física do universo das garras de um algoritmo inteligente.`;
 
-  const dreamCast = [
-    "Keanu Reeves (como o herói enigmático)",
-    "Zendaya (como a cientista quântica rebelde)",
-    "Robert Downey Jr. (como o mentor excêntrico)",
-    "Wagner Moura (como o antagonista calculista e implacável)"
-  ];
 
-  const boxOfficeEstimate = `U$ 1.${Math.floor(Math.random() * 9) + 1} Bilhão de Dólares Intergalácticos`;
 
-  return { title, synopsis, dreamCast, boxOfficeEstimate };
-}
 
-// Endpoint for recommending movies/series/TV shows based on user prompts
-app.post('/api/cineai/recommend', async (req, res) => {
-  const { prompt, history, currentWatchlist } = req.body;
-  try {
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(200).json({
-        isMock: true,
-        text: '### Olá! Sou o CineAI 🎬\n\nAtualmente estou operando no **modo offline** porque a chave `GEMINI_API_KEY` não foi configurada nos Secrets da aplicação. \n\nNo entanto, posso recomendar que você assista ao aclamado **"Estelar: Tears of Steel"** (Ficção Científica) ou mergulhe em **"Sintel: O Voo do Dragão"** (Fantasia/Aventura), que já estão disponíveis no catálogo principal! \n\n*Dica: Adicione sua chave de API para desbloquear meu cérebro cinematográfico completo!*'
-      });
-    }
 
-    const ai = getGenAI();
 
-    let responseText = '';
-    const models = ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-flash-latest'];
-    let lastChatError = null;
 
-    for (const model of models) {
-      let success = false;
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        try {
-          console.log(`[CineAI Recommend] Requesting model "${model}" - Attempt ${attempt}/2`);
-          const chat = ai.chats.create({
-            model: model,
-            config: {
-              systemInstruction: `Você é o CineAI, um assistente virtual ultra-inteligente especializado em cinema, séries e TV em português brasileiro.
-Você é extremamente simpático, apaixonado por sétima arte, entusiasmado e bem-humorado.
-Seu objetivo é ajudar o usuário a decidir o que assistir de acordo com o humor dele, o gênero desejado ou respondendo dúvidas gerais sobre o mundo do entretenimento.
-Sempre formule suas respostas com formatação Markdown linda e rica, usando listas, negritos, cabeçalhos, marcadores elegantes e até citações famosas se couberem no contexto.
-Indique quais filmes do catálogo local atual combinam melhor com a busca do usuário (mencione os nomes reais como 'Estelar: Tears of Steel', 'Sintel: O Voo do Dragão', 'A Vingança do Coelho: Big Buck Bunny', 'O Sonho do Astronauta' ou 'Cosmos Laundromat: Destinos Cruzados' sempre que o usuário pedir algo correlato). Se o usuário pedir recomendações gerais do mundo real, recomende filmes reais maravilhosos também!`
-            }
-          });
 
-          const contextPrompt = `O usuário está dizendo: "${prompt}".
-Minha lista de desejos atual do usuário (Watchlist): [${(currentWatchlist || []).join(', ')}].
-Por favor, responda diretamente em português de forma criativa e amigável.`;
 
-          const response = await chat.sendMessage({ message: contextPrompt });
-          responseText = response.text || '';
-          success = true;
-          break;
-        } catch (err: any) {
-          lastChatError = err;
-          console.log(`[CineAI Recommend Info] Model "${model}" response status on try ${attempt}: ${err.message || err}`);
-          if (attempt < 2) {
-            await new Promise(resolve => setTimeout(resolve, attempt * 850));
-          }
-        }
-      }
-      if (success) {
-        break;
-      }
-    }
 
-    if (!responseText && lastChatError) {
-      throw lastChatError;
-    }
 
-    res.json({ text: responseText });
-  } catch (error: any) {
-    console.warn('Error in CineAI recommend, activating high-fidelity fallback:', error.message || error);
-    
-    // Intelligently parse the user prompt to give a custom recommendation fallback
-    const promptLower = (prompt || '').toLowerCase();
-    let customText = '';
 
-    if (promptLower.includes('ficção') || promptLower.includes('robô') || promptLower.includes('futuro') || promptLower.includes('cyberpunk') || promptLower.includes('sci-fi')) {
-      customText = `### CineAI 🎬 (Recomendação Inteligente de Contingência)
 
-Percebi seu interesse em **Ficção Científica**! Como nosso canal de IA principal está temporariamente congestionado devido à alta demanda do Gemini, preparei uma recomendação especial do nosso catálogo estável:
 
-*   **Estelar: Tears of Steel (Sci-Fi Completo)**: Uma obra visual espetacular que se passa em Amsterdã, onde cientistas lutam contra robôs gigantes inteligentes usando memórias de afeto.
-*   **Por que assistir?** Conta com CGI de tirar o fôlego e discussões instigantes sobre IA e sentimentos humanos.
 
-*Espero que goste da indicação! Você pode assistir a este filme clicando nele no catálogo principal.*`;
-    } else if (promptLower.includes('fantasia') || promptLower.includes('dragão') || promptLower.includes('magia') || promptLower.includes('aventura')) {
-      customText = `### CineAI 🎬 (Recomendação Inteligente de Contingência)
 
-Você busca uma jornada cheia de **Aventura e Fantasia**! Ativei nosso protocolo de backup para recomendar a melhor opção:
 
-*   **Sintel: O Voo do Dragão**: Um conto lindíssimo sobre uma jovem guerreira que cuida de um pequeno dragão e cruza o mundo gelado para resgatá-lo quando ele é raptado.
-*   **Por que assistir?** É uma jornada emocionante com uma das trilhas sonoras orquestrais mais belas do cinema independente.
-
-*Clique no banner de Sintel na tela principal para iniciar a transmissão!*`;
-    } else if (promptLower.includes('comédia') || promptLower.includes('rir') || promptLower.includes('engraçado') || promptLower.includes('coelho') || promptLower.includes('família')) {
-      customText = `### CineAI 🎬 (Recomendação Inteligente de Contingência)
-
-Nada melhor do que dar boas risadas! Aqui está a nossa recomendação premium de **Comédia e Família**:
-
-*   **A Vingança do Coelho: Big Buck Bunny**: Um coelho gigante e brincalhão monta armadilhas engenhosas para dar uma lição em três roedores encrenqueiros.
-*   **Por que assistir?** Uma homenagem hilária aos desenhos clássicos de comédia física (estilo Tom & Jerry). Divertido para todas as idades!
-
-*Comece a dar risadas agora mesmo selecionando o Big Buck Bunny no menu de filmes!*`;
-    } else if (promptLower.includes('espaço') || promptLower.includes('nasa') || promptLower.includes('documentário') || promptLower.includes('estrela') || promptLower.includes('planeta')) {
-      customText = `### CineAI 🎬 (Recomendação Inteligente de Contingência)
-
-Seu destino é o **Cosmos e a Ciência**! Nosso sistema inteligente sugere:
-
-*   **O Sonho do Astronauta**: Uma série documental incrível utilizando filmagens originais de tirar o fôlego feitas pela NASA na órbita da Terra.
-*   **Por que assistir?** Mostra em detalhes realistas a preparação física, a vida em gravidade zero e a reentrada flamejante na atmosfera.
-
-*Explore os episódios disponíveis no catálogo de séries!*`;
-    } else {
-      customText = `### CineAI 🎬 (Recomendação de Contingência Ativada)
-
-Olá! Nosso processamento em nuvem com o Gemini está temporariamente em manutenção ou com alta demanda, mas eu conheço nosso catálogo como a palma da minha mão! Com base na sua mensagem, sugiro estas excelentes produções reais completas:
-
-1.  **Estelar: Tears of Steel** (Gênero: Ficção Científica / Aventura)
-    *   *Sinopse rápida*: Cientistas tentam deter robôs gigantes no observatório de Amsterdã.
-2.  **Sintel: O Voo do Dragão** (Gênero: Fantasia / Animação)
-    *   *Sinopse rápida*: A jornada inesquecível de uma garota e seu filhote de dragão.
-3.  **A Vingança do Coelho: Big Buck Bunny** (Gênero: Comédia / Família)
-    *   *Sinopse rápida*: Armadilhas super criativas de um coelho gigante contra roedores travessos.
-
-*Você pode clicar em qualquer uma dessas produções no catálogo para assistir agora mesmo!*`;
-    }
-
-    res.json({ text: customText });
-  }
-});
-
-// Endpoint for fetching rich trivia and review consensus in JSON
-app.post('/api/cineai/trivia', async (req, res) => {
-  const { title, type } = req.body;
-  try {
-    if (!process.env.GEMINI_API_KEY) {
-      // Return beautiful default trivia if API key is not set
-      return res.json(getFallbackTrivia(title, type));
-    }
-
-    const prompt = `Gere curiosidades de bastidores, uma frase marcante famosa, orientação parental e consenso crítico detalhados para a obra "${title}" (tipo: ${type}). Responda em português brasileiro.`;
-
-    const response = await generateContentWithRetryAndFallback({
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            trivia: { 
-              type: Type.STRING, 
-              description: 'Uma curiosidade fascinante e super detalhada sobre os bastidores da produção ou curiosidades gerais em português.' 
-            },
-            famousQuote: { 
-              type: Type.STRING, 
-              description: 'Uma citação inesquecível do filme/série com autoria do personagem se possível.' 
-            },
-            parentalGuidance: { 
-              type: Type.STRING, 
-              description: 'Explicação didática sobre os temas sensíveis (se houver) e por que tem essa classificação indicativa em português.' 
-            },
-            criticalConsensus: { 
-              type: Type.STRING, 
-              description: 'Consenso da crítica compilando notas médias de portais renomados e avaliações estilísticas da direção em português.' 
-            }
-          },
-          required: ['trivia', 'famousQuote', 'parentalGuidance', 'criticalConsensus']
-        }
-      }
-    });
-
-    const data = JSON.parse(response.text || '{}');
-    res.json(data);
-  } catch (error: any) {
-    console.warn('Error in CineAI trivia, returning high-fidelity fallback trivia:', error.message || error);
-    res.json(getFallbackTrivia(title, type));
-  }
-});
-
-// Endpoint to generate a custom fictional movie concept
-app.post('/api/cineai/generate-custom', async (req, res) => {
-  const { genre1, genre2, concept } = req.body;
-  try {
-    if (!process.env.GEMINI_API_KEY) {
-      return res.json(getFallbackConcept(genre1, genre2, concept));
-    }
-
-    const prompt = `Crie um conceito de filme fictício misturando os gêneros "${genre1}" e "${genre2}".
-Ideia base do usuário: "${concept || 'Nenhuma ideia base fornecida, crie algo totalmente selvagem!'}".
-Retorne uma resposta em JSON com o título do filme fictício, uma sinopse absurda e instigante, elenco dos sonhos fictício, e estimativa de bilheteria intergaláctica.`;
-
-    const response = await generateContentWithRetryAndFallback({
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            synopsis: { type: Type.STRING },
-            dreamCast: { type: Type.ARRAY, items: { type: Type.STRING } },
-            boxOfficeEstimate: { type: Type.STRING }
-          },
-          required: ['title', 'synopsis', 'dreamCast', 'boxOfficeEstimate']
-        }
-      }
-    });
-
-    const data = JSON.parse(response.text || '{}');
-    res.json(data);
-  } catch (error: any) {
-    console.warn('Error in custom concept generation, using high-fidelity fallback:', error.message || error);
-    res.json(getFallbackConcept(genre1, genre2, concept));
-  }
-});
 
 // ================= WAREZCDN SEARCH API ENDPOINT =================
 app.get('/api/warez/search', async (req, res) => {
@@ -751,21 +428,6 @@ interface IPTVChannel {
 
 const defaultChannels: IPTVChannel[] = [
   {
-    id: 'tv_sbt',
-    name: 'SBT HD (Nacional)',
-    logo: 'https://images.unsplash.com/photo-1598257006458-087169a1f08d?auto=format&fit=crop&q=80&w=120',
-    videoUrl: 'https://sbt-central-live.akamaized.net/hls/live/2012016/central/master.m3u8',
-    category: 'Geral',
-    country: 'BR',
-    nowPlaying: 'Programação de Variedades e Novelas',
-    nextShow: 'SBT Brasil Especial (20:30)',
-    ticker: [
-      'ASSISTA AO VIVO: Programação oficial aberta do SBT',
-      'Novidades na grade: Novas séries e transmissões de torneios esportivos confirmados',
-      'Seja bem-vindo à experiência de streaming CINEPLAY 100% Real!'
-    ]
-  },
-  {
     id: 'tv_record_news',
     name: 'Record News (Notícias ao Vivo)',
     logo: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&q=80&w=120',
@@ -778,6 +440,21 @@ const defaultChannels: IPTVChannel[] = [
       'RECORD NEWS: As principais manchetes do Brasil e do mundo com cobertura 24h',
       'Mercado financeiro fecha em alta de 1.25% nesta última sessão de negócios',
       'CINEPLAY: Assista canais reais em qualquer tela sem lag ou interrupções.'
+    ]
+  },
+  {
+    id: 'tv_sbt',
+    name: 'SBT HD (Nacional)',
+    logo: 'https://images.unsplash.com/photo-1598257006458-087169a1f08d?auto=format&fit=crop&q=80&w=120',
+    videoUrl: 'https://sbt-live.akamaized.net/hls/live/2012016/sbt/master.m3u8',
+    category: 'Geral',
+    country: 'BR',
+    nowPlaying: 'Programação de Variedades e Novelas',
+    nextShow: 'SBT Brasil Especial (20:30)',
+    ticker: [
+      'ASSISTA AO VIVO: Programação oficial aberta do SBT',
+      'Novidades na grade: Novas séries e transmissões de torneios esportivos confirmados',
+      'Seja bem-vindo à experiência de streaming CINEPLAY 100% Real!'
     ]
   },
   {
@@ -1134,11 +811,57 @@ app.get('/api/iptv/proxy', async (req, res) => {
                            error.code === 'ETIMEDOUT';
     
     if (isNetworkError) {
-      console.warn(`[IPTV Proxy] Remote stream offline/unreachable: ${streamUrl} (${errMsg})`);
+      console.log(`[IPTV Connection] Stream connection currently unavailable for URL: ${streamUrl} (${errMsg}). Attempting stable public fallback.`);
+      
+      const isPlaylistRequest = streamUrl.toLowerCase().includes('m3u8') || streamUrl.toLowerCase().includes('.m3u8');
+      if (isPlaylistRequest) {
+        // Fallback to highly stable Record News
+        const fallbackUrl = 'https://recordnews-r7-aws.sambatech.com.br/live/smil:rn.smil/playlist.m3u8';
+        try {
+          const fallbackResponse = await fetchWithTimeout(fallbackUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'Referer': new URL(fallbackUrl).origin
+            }
+          }, 3000);
+          
+          if (fallbackResponse.ok) {
+            const text = await fallbackResponse.text();
+            if (text.includes('#EXTM3U')) {
+              const lines = text.split('\n');
+              const rewrittenLines = lines.map(line => {
+                const trimmed = line.trim();
+                if (!trimmed) return line;
+                if (trimmed.startsWith('#')) {
+                  let modified = line;
+                  const uriMatch = line.match(/URI="([^"]+)"/i);
+                  if (uriMatch) {
+                    const originalUri = uriMatch[1];
+                    const absoluteUri = resolveUrl(fallbackUrl, originalUri);
+                    const proxiedUri = `/api/iptv/proxy?url=${encodeURIComponent(absoluteUri)}`;
+                    modified = line.replace(`URI="${originalUri}"`, `URI="${proxiedUri}"`);
+                  }
+                  return modified;
+                }
+                const absolute = resolveUrl(fallbackUrl, trimmed);
+                return `/api/iptv/proxy?url=${encodeURIComponent(absolute)}`;
+              });
+              
+              res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+              res.setHeader('Access-Control-Allow-Origin', '*');
+              res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+              return res.send(rewrittenLines.join('\n'));
+            }
+          }
+        } catch (fErr: any) {
+          console.log(`[IPTV Proxy] Fallback failed: ${fErr.message}`);
+        }
+      }
+
       res.setHeader('Access-Control-Allow-Origin', '*');
       return res.status(502).send(`Upstream stream offline: ${errMsg}`);
     } else {
-      console.warn(`[IPTV Proxy Error] Unexpected error for ${streamUrl}:`, error);
+      console.log(`[IPTV Connection Error] Unexpected error for URL ${streamUrl}:`, error.message || error);
       res.setHeader('Access-Control-Allow-Origin', '*');
       return res.status(500).send(`Proxy error: ${errMsg}`);
     }

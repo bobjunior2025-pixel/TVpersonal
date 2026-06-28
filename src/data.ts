@@ -155,20 +155,6 @@ export interface LiveChannel {
 
 export const LIVE_CHANNELS: LiveChannel[] = [
   {
-    id: 'tv_sbt',
-    name: 'SBT HD (Nacional)',
-    logo: '📺',
-    videoUrl: 'https://sbt-central-live.akamaized.net/hls/live/2012016/central/master.m3u8', // Link m3u8 real de transmissão aberta regional do SBT
-    category: 'Filmes',
-    nowPlaying: 'Programação de Variedades e Novelas',
-    nextShow: 'SBT Brasil Especial (20:30)',
-    ticker: [
-      'ASSISTA AO VIVO: Programação oficial aberta do SBT',
-      'Novidades na grade: Novas séries e transmissões de torneios esportivos confirmados',
-      'Seja bem-vindo à experiência de streaming CINEPLAY 100% Real!'
-    ]
-  },
-  {
     id: 'tv_record_news',
     name: 'Record News (Notícias ao Vivo)',
     logo: '📰',
@@ -180,6 +166,20 @@ export const LIVE_CHANNELS: LiveChannel[] = [
       'RECORD NEWS: As principais manchetes do Brasil e do mundo com cobertura 24h',
       'Mercado financeiro fecha em alta de 1.25% nesta última sessão de negócios',
       'CINEPLAY: Assista canais reais em qualquer tela sem lag ou interrupções.'
+    ]
+  },
+  {
+    id: 'tv_sbt',
+    name: 'SBT HD (Nacional)',
+    logo: '📺',
+    videoUrl: 'https://sbt-live.akamaized.net/hls/live/2012016/sbt/master.m3u8', // Novo link m3u8 real de transmissão do SBT
+    category: 'Filmes',
+    nowPlaying: 'Programação de Variedades e Novelas',
+    nextShow: 'SBT Brasil Especial (20:30)',
+    ticker: [
+      'ASSISTA AO VIVO: Programação oficial aberta do SBT',
+      'Novidades na grade: Novas séries e transmissões de torneios esportivos confirmados',
+      'Seja bem-vindo à experiência de streaming CINEPLAY 100% Real!'
     ]
   },
   {
