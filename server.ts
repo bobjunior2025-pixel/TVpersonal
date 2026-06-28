@@ -40,7 +40,12 @@ const TMDB_API_KEYS = [
   'e897b09c54ffef7e8a9f622f960f4e2f',
   '844dba0bfd8f3a4eec798c61385335b8',
   '15d1a227521bb4db96752d585b736937',
-  'd20e791f464002660d5bfa60890bf8c3'
+  'd20e791f464002660d5bfa60890bf8c3',
+  '3ec0f1ab6233190da90f230f69747971',
+  'fe8f7a95079a40590a8801d0a51c4a1e',
+  'c15668d8cb3005a764d8db1cb417b5f5',
+  'a7a407336f01df22bc13d54407b469b8',
+  '4f4f03ad56e2996d9bf3c9fa9c7fc63e'
 ];
 
 interface ImageCacheEntry {
@@ -56,13 +61,21 @@ async function fetchWithKeyRotation(endpoint: string): Promise<any> {
     try {
       const url = `https://api.themoviedb.org/3/${endpoint}${endpoint.includes('?') ? '&' : '?'}api_key=${apiKey}`;
       const res = await fetch(url, {
-        headers: { 'Accept': 'application/json' },
-        signal: AbortSignal.timeout(3000)
+        headers: { 
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        signal: AbortSignal.timeout(4000)
       });
       if (res.ok) {
         return await res.json();
+      } else {
+        const text = await res.text().catch(() => '');
+        console.error(`[TMDB] Key failed with status ${res.status}: ${text.substring(0, 100)}`);
+        lastError = new Error(`Status ${res.status}: ${text}`);
       }
-    } catch (err) {
+    } catch (err: any) {
+      console.error(`[TMDB] Fetch error for key:`, err?.message || err);
       lastError = err;
     }
   }
@@ -92,7 +105,7 @@ async function resolveRealImages(tmdbId: string, type: 'movie' | 'series'): Prom
       return entry;
     }
   } catch (err) {
-    // Fallback to HTML Scraper
+    // Fallback to HTML Scraper (Very robust & works even without API keys)
     try {
       const scraperUrl = `https://www.themoviedb.org/${type === 'series' ? 'tv' : 'movie'}/${tmdbId}`;
       const res = await fetch(scraperUrl, {
@@ -102,24 +115,27 @@ async function resolveRealImages(tmdbId: string, type: 'movie' | 'series'): Prom
       });
       if (res.ok) {
         const html = await res.text();
-        const ogImageMatch = html.match(/<meta\s+property=["']og:image["']\s+content=["'](https:\/\/image\.tmdb\.org\/t\/p\/[^\s"']+)["']/i);
-        let posterUrl = ogImageMatch ? ogImageMatch[1] : undefined;
+        const ogImageMatches = [...html.matchAll(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/gi)];
         
-        const backdropMatches = html.match(/\/t\/p\/w1920[^\s"']+\.(jpg|png|webp|jpeg)/gi) || 
-                                html.match(/\/t\/p\/original[^\s"']+\.(jpg|png|webp|jpeg)/gi);
-        let backdropUrl = backdropMatches ? `https://image.tmdb.org${backdropMatches[0]}` : undefined;
+        let posterUrl = ogImageMatches[0]?.[1];
+        let backdropUrl = ogImageMatches[1]?.[1];
 
-        if (posterUrl || backdropUrl) {
+        // Ensure we fall back or format backdrop if only poster found
+        if (posterUrl && !backdropUrl) {
+          backdropUrl = posterUrl.replace(/\/t\/p\/w[0-9]+/, '/t/p/original');
+        }
+
+        if (posterUrl) {
           const entry: ImageCacheEntry = {
-            posterUrl: posterUrl || 'https://images.unsplash.com/photo-1594744803329-e58b31de215f?auto=format&fit=crop&q=80&w=600',
-            backdropUrl: backdropUrl || posterUrl || 'https://images.unsplash.com/photo-1594744803329-e58b31de215f?auto=format&fit=crop&q=80&w=1200'
+            posterUrl: posterUrl,
+            backdropUrl: backdropUrl || posterUrl
           };
           imageCache.set(cacheKey, entry);
           return entry;
         }
       }
     } catch (scrapeErr) {
-      // ignore
+      console.error(`[TMDB Scraper] Failed to scrape ${type} ${tmdbId}:`, scrapeErr);
     }
   }
 
@@ -824,7 +840,8 @@ app.get('/api/warez/search', async (req, res) => {
   const qLower = query.toLowerCase();
   const qClean = qLower.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   
-  const filtered = enhancedDb.filter(item => {
+  // Search local database
+  const localFiltered = enhancedDb.filter(item => {
     const titleClean = item.title.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const synopsisClean = item.synopsis.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const genresClean = item.genres.map(g => g.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
@@ -835,7 +852,148 @@ app.get('/api/warez/search', async (req, res) => {
            item.year.toString().includes(qClean);
   });
 
-  return res.json(filtered.length > 0 ? filtered : enhancedDb);
+  // Query TMDB search page dynamically to fetch ANY content from TMDB library (100k+ titles)
+  let tmdbResults: any[] = [];
+  try {
+    const tmdbSearchUrl = `https://www.themoviedb.org/search?query=${encodeURIComponent(query)}&language=pt-BR`;
+    const response = await fetch(tmdbSearchUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7'
+      }
+    });
+    if (response.ok) {
+      const html = await response.text();
+      const cardBlocks = html.match(/<div[^>]*class="[^"]*comp:media-card[^"]*"[\s\S]*?<div class="flex flex-wrap items-center content-center w-full p-3">[\s\S]*?<\/div>[\s\S]*?<\/div>[\s\S]*?<\/div>/gi) || [];
+      
+      for (const block of cardBlocks) {
+        const typeMatch = block.match(/href="\/(movie|tv)\/([0-9]+)[^"]*"/i);
+        if (!typeMatch) continue;
+        const type = typeMatch[1];
+        const tmdbId = parseInt(typeMatch[2], 10);
+        
+        const titleMatch = block.match(/<h2[^>]*><span>(.*?)<\/span><\/h2>/i) || block.match(/alt="([^"]+)"/i);
+        let title = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '').trim() : 'Sem título';
+        // Clean duplicate title parenthesis
+        if (title.includes(' (')) {
+          const parts = title.split(' (');
+          if (parts[0].toLowerCase() === parts[1].replace(')', '').toLowerCase()) {
+            title = parts[0];
+          }
+        }
+
+        const dateMatch = block.match(/<span class="release_date[^"]*">(.*?)<\/span>/i);
+        const dateStr = dateMatch ? dateMatch[1].trim() : '';
+        const year = parseInt(dateStr.match(/[0-9]{4}/)?.[0] || '2024', 10);
+        
+        const overviewMatch = block.match(/<p>(.*?)<\/p>/i);
+        const synopsis = overviewMatch ? overviewMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+        
+        // Extract poster url
+        const imgMatch = block.match(/src="([^"]+)"/i);
+        let posterPath = '';
+        if (imgMatch) {
+          const parts = imgMatch[1].split('/');
+          const lastPart = parts[parts.length - 1];
+          if (lastPart && lastPart.endsWith('.jpg')) {
+            posterPath = lastPart;
+          }
+        }
+        
+        const posterUrl = posterPath 
+          ? `https://media.themoviedb.org/t/p/w500/${posterPath}` 
+          : 'https://images.unsplash.com/photo-1594744803329-e58b31de215f?auto=format&fit=crop&q=80&w=600';
+        const backdropUrl = posterPath 
+          ? `https://media.themoviedb.org/t/p/original/${posterPath}` 
+          : 'https://images.unsplash.com/photo-1594744803329-e58b31de215f?auto=format&fit=crop&q=80&w=1200';
+
+        tmdbResults.push({
+          id: `warez_${type}_${tmdbId}`,
+          tmdbId,
+          title,
+          type: type === 'tv' ? 'series' : 'movie',
+          year,
+          rating: 8.2,
+          duration: type === 'tv' ? 'Série' : 'Filme',
+          ageRating: '14',
+          synopsis,
+          genres: ['Resultados de Busca'],
+          posterUrl,
+          backdropUrl
+        });
+      }
+    }
+  } catch (err) {
+    console.error(`[TMDB Search Error]:`, err);
+  }
+
+  // Combine and de-duplicate results
+  const combined = [...localFiltered];
+  for (const tmdbItem of tmdbResults) {
+    const isDuplicate = combined.some(item => item.tmdbId === tmdbItem.tmdbId && item.type === tmdbItem.type);
+    if (!isDuplicate) {
+      combined.push(tmdbItem);
+    }
+  }
+
+  return res.json(combined);
+});
+
+// Dynamic endpoint to load season counts for a series on-the-fly
+app.get('/api/warez/tv-details', async (req, res) => {
+  const tmdbId = req.query.tmdbId as string;
+  if (!tmdbId) {
+    return res.status(400).json({ error: 'Missing tmdbId' });
+  }
+
+  try {
+    const url = `https://www.themoviedb.org/tv/${tmdbId}/seasons`;
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+    if (response.ok) {
+      const html = await response.text();
+      const matches = [...html.matchAll(/href="\/tv\/[0-9]+[^"]*\/season\/([0-9]+)"/gi)];
+      const seasonNumbers = matches.map(m => parseInt(m[1], 10));
+      const maxSeason = Math.max(1, ...seasonNumbers);
+      return res.json({ seasonsCount: maxSeason });
+    }
+  } catch (err) {
+    console.error(`[TMDB Seasons Count Error]:`, err);
+  }
+
+  return res.json({ seasonsCount: 1 });
+});
+
+// Dynamic endpoint to load episode count for a given season on-the-fly
+app.get('/api/warez/tv-episodes', async (req, res) => {
+  const tmdbId = req.query.tmdbId as string;
+  const season = req.query.season as string || '1';
+  if (!tmdbId) {
+    return res.status(400).json({ error: 'Missing tmdbId' });
+  }
+
+  try {
+    const url = `https://www.themoviedb.org/tv/${tmdbId}/season/${season}`;
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+    if (response.ok) {
+      const html = await response.text();
+      const matches = [...html.matchAll(new RegExp(`href="\\/tv\\/[0-9]+[^"]*\\/season\\/${season}\\/episode\\/([0-9]+)"`, 'gi'))];
+      const eps = matches.map(m => parseInt(m[1], 10));
+      const maxEp = Math.max(1, ...eps);
+      return res.json({ episodesCount: maxEp });
+    }
+  } catch (err) {
+    console.error(`[TMDB Episode Count Error]:`, err);
+  }
+
+  return res.json({ episodesCount: 12 });
 });
 
 // ================= IPTV PLAYLIST LOADER & PARSER =================

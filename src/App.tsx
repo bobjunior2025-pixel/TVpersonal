@@ -54,6 +54,54 @@ export default function App() {
   const [warezDomain, setWarezDomain] = useState<'embed.warezcdn.lat' | 'embed.warezcdn.link'>('embed.warezcdn.lat');
   const [warezSearchError, setWarezSearchError] = useState<string>('');
 
+  // Dynamic TV series details state
+  const [dynamicSeasonsCount, setDynamicSeasonsCount] = useState<number>(1);
+  const [dynamicEpisodesCount, setDynamicEpisodesCount] = useState<number>(12);
+  const [loadingTvDetails, setLoadingTvDetails] = useState<boolean>(false);
+
+  // Auto-fetch TV Series seasons when selected
+  useEffect(() => {
+    if (selectedWarezContent && selectedWarezContent.type === 'series') {
+      setLoadingTvDetails(true);
+      setSelectedWarezSeason(1);
+      setSelectedWarezEpisode(1);
+      
+      fetch(`/api/warez/tv-details?tmdbId=${selectedWarezContent.tmdbId}`)
+        .then(res => res.json())
+        .then(data => {
+          setDynamicSeasonsCount(data.seasonsCount || selectedWarezContent.seasonsCount || 1);
+          setLoadingTvDetails(false);
+        })
+        .catch(err => {
+          console.error('Error fetching TV details:', err);
+          setDynamicSeasonsCount(selectedWarezContent.seasonsCount || 1);
+          setLoadingTvDetails(false);
+        });
+    } else {
+      setDynamicSeasonsCount(1);
+      setDynamicEpisodesCount(12);
+    }
+  }, [selectedWarezContent]);
+
+  // Auto-fetch TV Series episodes when season changes
+  useEffect(() => {
+    if (selectedWarezContent && selectedWarezContent.type === 'series') {
+      fetch(`/api/warez/tv-episodes?tmdbId=${selectedWarezContent.tmdbId}&season=${selectedWarezSeason}`)
+        .then(res => res.json())
+        .then(data => {
+          setDynamicEpisodesCount(data.episodesCount || 12);
+        })
+        .catch(err => {
+          console.error('Error fetching TV episodes:', err);
+          if (selectedWarezContent.episodesCount && selectedWarezContent.episodesCount[selectedWarezSeason - 1]) {
+            setDynamicEpisodesCount(selectedWarezContent.episodesCount[selectedWarezSeason - 1]);
+          } else {
+            setDynamicEpisodesCount(12);
+          }
+        });
+    }
+  }, [selectedWarezContent, selectedWarezSeason]);
+
   // ==================== TV & KEYBOARD NAVIGATION (D-PAD) ====================
   // focusedSection: 'sidebar' | 'grid' | 'modal'
   const [focusedSection, setFocusedSection] = useState<'sidebar' | 'grid' | 'modal'>('sidebar');
@@ -478,6 +526,17 @@ export default function App() {
                 )}
               </button>
             </form>
+
+            {/* Catalog Info Banner */}
+            <div className="bg-amber-500/5 border border-amber-500/10 rounded-2xl p-4 text-xs text-zinc-300 max-w-xl flex items-start space-x-3">
+              <div className="text-amber-500 mt-0.5 font-bold shrink-0">ℹ️</div>
+              <div className="space-y-1">
+                <p className="font-bold text-white text-sm">Catálogo WarezCDN Ilimitado!</p>
+                <p className="text-zinc-400 leading-relaxed text-xs">
+                  Os 46 títulos abaixo são os destaques de cinema pré-carregados no painel. O servidor de streaming <strong>WarezCDN possui mais de 100 mil títulos disponíveis</strong>. Digite o nome de qualquer filme, série, anime ou novela no campo de busca para sintonizar a transmissão instantaneamente!
+                </p>
+              </div>
+            </div>
 
             {/* Suggestions buttons */}
             <div className="flex flex-wrap items-center gap-2 text-[10px]">
@@ -1215,7 +1274,7 @@ export default function App() {
                               }}
                               className="w-full bg-zinc-950 border border-zinc-800 text-xs text-white rounded-lg px-2.5 py-2 focus:outline-none"
                             >
-                              {Array.from({ length: selectedWarezContent.seasonsCount || 1 }, (_, i) => i + 1).map(s => (
+                              {Array.from({ length: dynamicSeasonsCount }, (_, i) => i + 1).map(s => (
                                 <option key={s} value={s}>Temporada {s}</option>
                               ))}
                             </select>
@@ -1228,9 +1287,7 @@ export default function App() {
                               onChange={(e) => setSelectedWarezEpisode(parseInt(e.target.value, 10))}
                               className="w-full bg-zinc-950 border border-zinc-800 text-xs text-white rounded-lg px-2.5 py-2 focus:outline-none"
                             >
-                              {Array.from({ 
-                                length: (selectedWarezContent.episodesCount && selectedWarezContent.episodesCount[selectedWarezSeason - 1]) || 12 
-                              }, (_, i) => i + 1).map(e => (
+                              {Array.from({ length: dynamicEpisodesCount }, (_, i) => i + 1).map(e => (
                                 <option key={e} value={e}>Episódio {e}</option>
                               ))}
                             </select>
