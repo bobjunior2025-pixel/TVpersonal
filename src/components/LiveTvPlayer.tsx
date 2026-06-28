@@ -127,7 +127,6 @@ export default function LiveTvPlayer({ channel }: LiveTvPlayerProps) {
           playbackState === 'playing' ? 'opacity-100' : 'opacity-0 absolute pointer-events-none'
         }`}
         autoPlay
-        muted
         controls
         playsInline
       />

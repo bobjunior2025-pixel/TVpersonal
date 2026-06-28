@@ -37,6 +37,7 @@ export default function App() {
   // Warez CDN Integration States
   const [warezQuery, setWarezQuery] = useState('');
   const [warezResults, setWarezResults] = useState<any[]>([]);
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<'all' | 'movie' | 'series' | 'kids'>('all');
   const [isSearchingWarez, setIsSearchingWarez] = useState(false);
   const [selectedWarezContent, setSelectedWarezContent] = useState<any | null>(null);
   const [selectedWarezSeason, setSelectedWarezSeason] = useState<number>(1);
@@ -76,6 +77,26 @@ export default function App() {
   };
 
   const isFavorited = (id: string) => watchlist.some(w => w.id === id);
+
+  // Carregar catálogo de sucessos (Estilo YouCine) ao iniciar
+  useEffect(() => {
+    const loadDefaultCatalog = async () => {
+      setIsSearchingWarez(true);
+      setWarezSearchError('');
+      try {
+        const res = await fetch('/api/warez/search?query=');
+        if (res.ok) {
+          const data = await res.json();
+          setWarezResults(data || []);
+        }
+      } catch (err: any) {
+        console.error('Erro ao carregar catálogo inicial:', err);
+      } finally {
+        setIsSearchingWarez(false);
+      }
+    };
+    loadDefaultCatalog();
+  }, []);
 
   // Search Warez
   const handleSearchWarez = async (queryToSearch?: string, e?: React.FormEvent) => {
@@ -321,6 +342,17 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [focusedSection, focusedIndex, activeTab, warezResults, iptvChannels, watchlist, selectedWarezContent, selectedWarezSeason, selectedWarezEpisode]);
 
+  // Filter warez results based on selected tab category (YouCine style)
+  const filteredWarezResults = warezResults.filter(item => {
+    if (selectedTypeFilter === 'all') return true;
+    if (selectedTypeFilter === 'movie') return item.type === 'movie';
+    if (selectedTypeFilter === 'series') return item.type === 'series';
+    if (selectedTypeFilter === 'kids') {
+      return item.genres && (item.genres.includes('Animação') || item.genres.includes('Fantasia') || item.genres.includes('Comédia'));
+    }
+    return true;
+  });
+
   return (
     <div className="min-h-screen bg-zinc-950 text-white font-sans flex flex-col md:flex-row relative overflow-x-hidden selection:bg-amber-500 selection:text-black">
       
@@ -465,6 +497,69 @@ export default function App() {
               ))}
             </div>
 
+            {/* YouCine Spotlight Hero Banner */}
+            {!isSearchingWarez && warezResults.length > 0 && (
+              <div className="relative w-full rounded-3xl overflow-hidden shadow-2xl border border-zinc-900/60 bg-zinc-950 aspect-[21/9] min-h-[220px] md:min-h-[340px] flex items-end">
+                {/* Background Image with Cinematic Black Gradient Overlay */}
+                <div className="absolute inset-0 z-0">
+                  <img 
+                    src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=1200" 
+                    alt="Spotlight" 
+                    className="w-full h-full object-cover object-center opacity-40 scale-100 transition-all duration-700 hover:scale-105"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/70 to-transparent z-10" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-950/50 to-transparent z-10" />
+                </div>
+
+                {/* Content Overlay */}
+                <div className="relative z-20 p-6 md:p-10 max-w-2xl space-y-3.5">
+                  <div className="flex items-center space-x-2.5">
+                    <span className="text-[9px] font-black uppercase tracking-wider bg-amber-500 text-black px-2.5 py-1 rounded-md">
+                      DESTAQUE MegaCine
+                    </span>
+                    <span className="text-xs text-amber-400 font-extrabold flex items-center">
+                      <Star className="fill-amber-400 text-amber-400 mr-1" size={12} />
+                      8.7 <span className="text-zinc-500 font-normal ml-1">IMDb</span>
+                    </span>
+                  </div>
+                  <h3 className="text-3xl md:text-5xl font-black text-white tracking-tight uppercase leading-none font-sans">
+                    INTERESTELAR
+                  </h3>
+                  <p className="text-xs text-zinc-300 leading-relaxed max-w-lg hidden sm:block">
+                    As reservas naturais da Terra estão se esgotando e um grupo de astronautas recebe a missão de verificar possíveis planetas para receberem a população mundial através de um buraco de minhoca.
+                  </p>
+                  <div className="flex items-center gap-3 pt-1">
+                    <button 
+                      onClick={() => {
+                        const item = warezResults.find(w => w.tmdbId === '157336') || warezResults[0];
+                        if (item) {
+                          setSelectedWarezContent(item);
+                          setSelectedWarezSeason(1);
+                          setSelectedWarezEpisode(1);
+                          setActiveWarezPlayer(null);
+                        }
+                      }}
+                      className="bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs px-6 py-3.5 rounded-xl transition flex items-center space-x-2 shadow-lg shadow-amber-500/10 cursor-pointer"
+                    >
+                      <Play className="fill-black text-black" size={14} />
+                      <span>Assistir Agora</span>
+                    </button>
+                    <button 
+                      onClick={() => {
+                        const item = warezResults.find(w => w.tmdbId === '157336') || warezResults[0];
+                        if (item) toggleWatchlist(item);
+                      }}
+                      className="bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 text-white font-bold text-xs px-5 py-3.5 rounded-xl transition flex items-center space-x-2 backdrop-blur-md cursor-pointer"
+                    >
+                      <Heart className={isFavorited('warez_157336') ? "text-red-500 fill-red-500" : "text-amber-500 fill-amber-500"} size={14} />
+                      <span>{isFavorited('warez_157336') ? 'Remover da Lista' : 'Salvar na Lista'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {warezSearchError && (
               <div className="p-4 bg-red-950/20 border border-red-900/50 rounded-xl text-xs text-red-400 flex items-center space-x-2">
                 <AlertCircle size={14} />
@@ -479,10 +574,40 @@ export default function App() {
                 <p className="text-xs text-zinc-500 font-mono">Consolidadando mídias do WarezCDN...</p>
               </div>
             ) : warezResults.length > 0 ? (
-              <div className="space-y-4">
-                <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest font-mono">Mídias Encontradas</h3>
+              <div className="space-y-6">
+                
+                {/* YouCine navigation category bar */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-900 pb-3">
+                  <div className="flex items-center space-x-1.5 overflow-x-auto scrollbar-none py-1">
+                    {[
+                      { id: 'all', label: 'INÍCIO' },
+                      { id: 'movie', label: 'FILMES' },
+                      { id: 'series', label: 'SÉRIES' },
+                      { id: 'kids', label: 'KIDS / ANIME' }
+                    ].map((tab) => {
+                      const isActive = selectedTypeFilter === tab.id;
+                      return (
+                        <button
+                          key={tab.id}
+                          onClick={() => setSelectedTypeFilter(tab.id as any)}
+                          className={`px-4 py-2 text-xs font-black tracking-wider rounded-full transition whitespace-nowrap cursor-pointer ${
+                            isActive 
+                              ? 'bg-amber-500 text-black shadow-md shadow-amber-500/10 font-black' 
+                              : 'text-zinc-400 hover:text-white bg-zinc-900/30 border border-zinc-900 hover:border-zinc-850'
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="text-[10px] text-zinc-500 font-mono tracking-widest uppercase">
+                    Exibindo {filteredWarezResults.length} de {warezResults.length} títulos
+                  </span>
+                </div>
+
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
-                  {warezResults.map((item, index) => {
+                  {filteredWarezResults.map((item, index) => {
                     const isItemFocused = focusedSection === 'grid' && focusedIndex === index;
                     return (
                       <div
@@ -559,8 +684,8 @@ export default function App() {
 
             {/* IPTV Filter bar */}
             <div className="bg-zinc-900/40 border border-zinc-900 p-4 rounded-2xl space-y-3">
-              <div className="flex flex-col md:flex-row gap-3">
-                <div className="flex-1 relative">
+              <div className="flex flex-col gap-3">
+                <div className="relative">
                   <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
                   <input
                     type="text"
@@ -571,38 +696,58 @@ export default function App() {
                   />
                 </div>
                 
-                <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    value={selectedIptvCountry}
-                    onChange={(e) => setSelectedIptvCountry(e.target.value)}
-                    className="bg-zinc-950 border border-zinc-850 text-xs font-bold text-white rounded-xl px-3 py-2.5 focus:outline-none cursor-pointer"
-                  >
-                    <option value="">Todos os Países</option>
-                    <option value="BR">🇧🇷 Brasil</option>
-                    <option value="US">🇺🇸 Estados Unidos</option>
-                    <option value="AR">🇦🇷 Argentina</option>
-                    <option value="MX">🇲🇽 México</option>
-                  </select>
+                {/* Premium Country Tab Pills (Estilo YouCine) */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 w-full">
+                  <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 scrollbar-none">
+                    {[
+                      { id: 'BR', label: '🇧🇷 BRASIL' },
+                      { id: 'US', label: '🇺🇸 ESTADOS UNIDOS' },
+                      { id: 'AR', label: '🇦🇷 ARGENTINA' },
+                      { id: 'MX', label: '🇲🇽 MÉXICO' },
+                      { id: '', label: '🌎 TODOS' }
+                    ].map((tab) => {
+                      const isActive = selectedIptvCountry === tab.id;
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedIptvCountry(tab.id);
+                            setIptvPage(1);
+                          }}
+                          className={`px-4 py-2 text-xs font-black tracking-wider rounded-full transition whitespace-nowrap cursor-pointer ${
+                            isActive 
+                              ? 'bg-amber-500 text-black shadow-md shadow-amber-500/15 font-black' 
+                              : 'text-zinc-400 hover:text-white bg-zinc-900/40 border border-zinc-900 hover:border-zinc-850'
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      );
+                    })}
+                  </div>
 
-                  <select
-                    value={selectedIptvCategory}
-                    onChange={(e) => setSelectedIptvCategory(e.target.value)}
-                    className="bg-zinc-950 border border-zinc-850 text-xs font-bold text-white rounded-xl px-3 py-2.5 focus:outline-none cursor-pointer"
-                  >
-                    <option value="">Todas Categorias</option>
-                    {iptvCategories.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center space-x-2 shrink-0">
+                    <select
+                      value={selectedIptvCategory}
+                      onChange={(e) => setSelectedIptvCategory(e.target.value)}
+                      className="bg-zinc-950 border border-zinc-850 text-xs font-bold text-white rounded-xl px-3 py-2.5 focus:outline-none cursor-pointer"
+                    >
+                      <option value="">Todas Categorias</option>
+                      {iptvCategories.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
 
-                  <button
-                    onClick={reloadIptvDatabase}
-                    disabled={isSynchronizingM3u}
-                    className="p-2.5 bg-zinc-950 hover:bg-zinc-900 border border-zinc-850 rounded-xl text-zinc-400 hover:text-white transition disabled:opacity-50 cursor-pointer"
-                    title="Recarregar"
-                  >
-                    <RefreshCcw size={14} className={isSynchronizingM3u ? 'animate-spin text-amber-500' : ''} />
-                  </button>
+                    <button
+                      onClick={reloadIptvDatabase}
+                      disabled={isSynchronizingM3u}
+                      className="p-2.5 bg-zinc-950 hover:bg-zinc-900 border border-zinc-850 rounded-xl text-zinc-400 hover:text-white transition disabled:opacity-50 cursor-pointer"
+                      title="Recarregar"
+                    >
+                      <RefreshCcw size={14} className={isSynchronizingM3u ? 'animate-spin text-amber-500' : ''} />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -964,7 +1109,6 @@ export default function App() {
                         allowFullScreen
                         referrerPolicy="no-referrer"
                         allow="autoplay; encrypted-media"
-                        sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
                       />
                     </div>
 
