@@ -1,7 +1,6 @@
 import express from 'express';
 import path from 'path';
 import dotenv from 'dotenv';
-import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 
 dotenv.config();
@@ -825,6 +824,22 @@ function parseM3U(m3uContent: string): IPTVChannel[] {
   return channels;
 }
 
+async function fetchWithTimeout(url: string, options: any = {}, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
+}
+
 async function fetchIPTVChannels() {
   if (isFetchingIPTV) return;
   isFetchingIPTV = true;
@@ -840,12 +855,11 @@ async function fetchIPTVChannels() {
     const fetchPromises = playlists.map(async (playlist) => {
       try {
         console.log(`Iniciando download de ${playlist.name}...`);
-        const response = await fetch(playlist.url, {
+        const response = await fetchWithTimeout(playlist.url, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-          },
-          signal: AbortSignal.timeout(6000)
-        });
+          }
+        }, 6000);
         if (!response.ok) {
           throw new Error(`Falha status ${response.status}`);
         }
@@ -1051,13 +1065,12 @@ app.get('/api/iptv/proxy', async (req, res) => {
     const parsedUrl = new URL(streamUrl);
     
     // Fetch stream segment or playlist
-    const response = await fetch(streamUrl, {
+    const response = await fetchWithTimeout(streamUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Referer': parsedUrl.origin
-      },
-      signal: AbortSignal.timeout(4000)
-    });
+      }
+    }, 4000);
 
     if (!response.ok) {
       return res.status(response.status).send(`Failed to fetch remote stream: ${response.statusText}`);
@@ -1147,6 +1160,7 @@ async function startServer() {
   fetchIPTVChannels().catch(err => console.error('Initial IPTV loading error:', err));
   
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
