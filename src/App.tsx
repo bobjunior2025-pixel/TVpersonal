@@ -95,7 +95,8 @@ export default function App() {
     episode?: number;
   } | null>(null);
   const [embedSource, setEmbedSource] = useState<string>('servidor_6');
-  const [warezDomain, setWarezDomain] = useState<'embed.warezcdn.lat' | 'embed.warezcdn.link'>('embed.warezcdn.lat');
+  const [warezDomain, setWarezDomain] = useState<string>('embed.warezcdn.link');
+  const [superflixDomain, setSuperflixDomain] = useState<string>('superflixapi.lifestyle');
   const [warezSearchError, setWarezSearchError] = useState<string>('');
 
   // Dynamic TV series details state
@@ -1716,6 +1717,16 @@ export default function App() {
                       ? `https://player.videasy.to/movie/${tmdbId}`
                       : `https://player.videasy.to/tv/${tmdbId}/${s}/${e}`;
                     break;
+                  case 'servidor_7':
+                    embedUrl = type === 'movie'
+                      ? `https://${warezDomain}/movie/${tmdbId}`
+                      : `https://${warezDomain}/serie/${tmdbId}/${s}/${e}`;
+                    break;
+                  case 'servidor_8':
+                    embedUrl = type === 'movie'
+                      ? `https://${superflixDomain}/api/filme/${tmdbId}`
+                      : `https://${superflixDomain}/api/serie/${tmdbId}/${s}/${e}`;
+                    break;
                   default:
                     embedUrl = type === 'movie'
                       ? `https://player.videasy.to/movie/${tmdbId}`
@@ -1779,6 +1790,22 @@ export default function App() {
                           🇧🇷 Videasy (Destaque)
                         </button>
                         <button
+                          onClick={() => setEmbedSource('servidor_7')}
+                          className={`px-3 py-2 rounded-lg border text-[11px] font-bold transition text-left sm:text-center ${
+                            embedSource === 'servidor_7' ? 'bg-amber-500 text-black border-amber-500' : 'bg-zinc-950 text-zinc-400 border-zinc-850 hover:bg-zinc-900'
+                          }`}
+                        >
+                          🇧🇷 Servidor Warez (Dublado)
+                        </button>
+                        <button
+                          onClick={() => setEmbedSource('servidor_8')}
+                          className={`px-3 py-2 rounded-lg border text-[11px] font-bold transition text-left sm:text-center ${
+                            embedSource === 'servidor_8' ? 'bg-amber-500 text-black border-amber-500' : 'bg-zinc-950 text-zinc-400 border-zinc-850 hover:bg-zinc-900'
+                          }`}
+                        >
+                          🇧🇷 Servidor SuperFlix (Dub)
+                        </button>
+                        <button
                           onClick={() => setEmbedSource('servidor_1')}
                           className={`px-3 py-2 rounded-lg border text-[11px] font-bold transition text-left sm:text-center ${
                             embedSource === 'servidor_1' ? 'bg-amber-500 text-black border-amber-500' : 'bg-zinc-950 text-zinc-400 border-zinc-850 hover:bg-zinc-900'
@@ -1819,6 +1846,92 @@ export default function App() {
                           🇺🇸 Servidor 5 (VidSrc TO)
                         </button>
                       </div>
+
+                      {/* Font / Domain Settings */}
+                      {(embedSource === 'servidor_8' || embedSource === 'servidor_7') && (
+                        <div className="mt-3 pt-3 border-t border-zinc-800/80 text-left">
+                          {/* SuperFlix Domain configuration */}
+                          {embedSource === 'servidor_8' && (
+                            <div className="space-y-2 bg-zinc-950/50 p-3 rounded-lg border border-zinc-850">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                                <span className="text-[10px] font-mono font-black text-amber-500 uppercase tracking-wider">
+                                  🔧 Configuração SuperFlix API
+                                </span>
+                                <span className="text-[9px] font-medium text-zinc-500">
+                                  Mude o domínio caso o player não carregue
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div className="space-y-1">
+                                  <label className="text-[9px] font-bold text-zinc-400 block">Escolha uma extensão:</label>
+                                  <select
+                                    value={superflixDomain}
+                                    onChange={(e) => setSuperflixDomain(e.target.value)}
+                                    className="w-full bg-zinc-900 text-zinc-200 border border-zinc-800 text-[11px] px-2.5 py-2 rounded-lg font-medium focus:outline-none focus:border-amber-500 transition cursor-pointer"
+                                  >
+                                    <option value="superflixapi.lifestyle">superflixapi.lifestyle (Ativo / Recomendado)</option>
+                                    <option value="superflixapi.org">superflixapi.org (Alternativo)</option>
+                                    <option value="superflixapi.fun">superflixapi.fun (Estável)</option>
+                                    <option value="superflixapi.cc">superflixapi.cc</option>
+                                    <option value="superflixapi.dev">superflixapi.dev</option>
+                                    <option value="superflixapi.net">superflixapi.net</option>
+                                    <option value="superflixapi.top">superflixapi.top (Antigo / Fora do ar)</option>
+                                  </select>
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[9px] font-bold text-zinc-400 block">Ou digite o domínio manual:</label>
+                                  <input
+                                    type="text"
+                                    value={superflixDomain}
+                                    onChange={(e) => setSuperflixDomain(e.target.value)}
+                                    placeholder="Ex: novo-dominio.com"
+                                    className="w-full bg-zinc-900 text-zinc-200 border border-zinc-800 text-[11px] px-2.5 py-2 rounded-lg focus:outline-none focus:border-amber-500 font-mono transition"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Warez CDN Domain configuration */}
+                          {embedSource === 'servidor_7' && (
+                            <div className="space-y-2 bg-zinc-950/50 p-3 rounded-lg border border-zinc-850">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                                <span className="text-[10px] font-mono font-black text-amber-500 uppercase tracking-wider">
+                                  🔧 Configuração WarezCDN
+                                </span>
+                                <span className="text-[9px] font-medium text-zinc-500">
+                                  Mude o domínio do espelho se travar
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div className="space-y-1">
+                                  <label className="text-[9px] font-bold text-zinc-400 block">Escolha uma extensão:</label>
+                                  <select
+                                    value={warezDomain}
+                                    onChange={(e) => setWarezDomain(e.target.value)}
+                                    className="w-full bg-zinc-900 text-zinc-200 border border-zinc-800 text-[11px] px-2.5 py-2 rounded-lg font-medium focus:outline-none focus:border-amber-500 transition cursor-pointer"
+                                  >
+                                    <option value="embed.warezcdn.link">embed.warezcdn.link (Recomendado)</option>
+                                    <option value="embed.warezcdn.lat">embed.warezcdn.lat</option>
+                                    <option value="embed.warezcdn.net">embed.warezcdn.net</option>
+                                    <option value="embed.warezcdn.com">embed.warezcdn.com</option>
+                                  </select>
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[9px] font-bold text-zinc-400 block">Ou digite o domínio manual:</label>
+                                  <input
+                                    type="text"
+                                    value={warezDomain}
+                                    onChange={(e) => setWarezDomain(e.target.value)}
+                                    placeholder="Ex: embed.warezcdn.link"
+                                    className="w-full bg-zinc-900 text-zinc-200 border border-zinc-800 text-[11px] px-2.5 py-2 rounded-lg focus:outline-none focus:border-amber-500 font-mono transition"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
