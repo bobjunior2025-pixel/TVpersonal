@@ -151,6 +151,7 @@ export interface LiveChannel {
   nowPlaying: string;
   nextShow: string;
   ticker: string[];
+  country?: string;
 }
 
 export const LIVE_CHANNELS: LiveChannel[] = [

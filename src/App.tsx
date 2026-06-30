@@ -11,6 +11,9 @@ export default function App() {
   // Navigation
   const [activeTab, setActiveTab] = useState<'warez' | 'tv' | 'watchlist'>('warez');
   
+  // Ref to track if sintonizing a channel clicked from watchlist to prevent overwriting
+  const watchlistSelectionRef = useRef<string | null>(null);
+  
   // Watchlist (Local Storage)
   const [watchlist, setWatchlist] = useState<any[]>(() => {
     const saved = localStorage.getItem('warez_watchlist_v2');
@@ -50,7 +53,7 @@ export default function App() {
     season?: number;
     episode?: number;
   } | null>(null);
-  const [embedSource, setEmbedSource] = useState<string>('servidor_1');
+  const [embedSource, setEmbedSource] = useState<string>('servidor_6');
   const [warezDomain, setWarezDomain] = useState<'embed.warezcdn.lat' | 'embed.warezcdn.link'>('embed.warezcdn.lat');
   const [warezSearchError, setWarezSearchError] = useState<string>('');
 
@@ -206,7 +209,12 @@ export default function App() {
       if (data.categories && data.categories.length > 0) setIptvCategories(data.categories);
 
       if (data.channels && data.channels.length > 0 && resetList) {
-        setActiveChannel(data.channels[0]);
+        if (watchlistSelectionRef.current) {
+          // Cleared because we specifically clicked a channel from the watchlist
+          watchlistSelectionRef.current = null;
+        } else {
+          setActiveChannel(data.channels[0]);
+        }
       }
     } catch (err: any) {
       console.error('Error fetching IPTV:', err);
@@ -306,6 +314,10 @@ export default function App() {
         } else if (activeTab === 'watchlist' && watchlist[focusedIndex]) {
           const item = watchlist[focusedIndex];
           if (item.type === 'tv') {
+            watchlistSelectionRef.current = item.id;
+            setSelectedIptvCountry(item.country || 'BR');
+            setSelectedIptvCategory('');
+            setIptvSearchQuery('');
             setActiveChannel(item);
             setActiveTab('tv');
           } else {
@@ -911,6 +923,10 @@ export default function App() {
                       key={item.id}
                       onClick={() => {
                         if (item.type === 'tv') {
+                          watchlistSelectionRef.current = item.id;
+                          setSelectedIptvCountry(item.country || 'BR');
+                          setSelectedIptvCategory('');
+                          setIptvSearchQuery('');
                           setActiveChannel(item);
                           setActiveTab('tv');
                         } else {
@@ -1065,7 +1081,7 @@ export default function App() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Backdrop image */}
-            <div className="relative h-44 sm:h-56 md:h-64 lg:h-72 w-full shrink-0 bg-zinc-900">
+            <div className="relative h-24 sm:h-32 md:h-36 w-full shrink-0 bg-zinc-900">
               <img
                 src={selectedWarezContent.backdropUrl}
                 alt={selectedWarezContent.title}
@@ -1079,16 +1095,16 @@ export default function App() {
               
               <button
                 onClick={() => setSelectedWarezContent(null)}
-                className="absolute top-4 right-4 p-2.5 rounded-full bg-black/60 text-gray-300 hover:text-white border border-white/5 cursor-pointer z-50"
+                className="absolute top-3 right-3 p-2 rounded-full bg-black/60 text-gray-300 hover:text-white border border-white/5 cursor-pointer z-50"
               >
                 ✕
               </button>
 
-              <div className="absolute bottom-4 left-6 flex items-end space-x-2">
-                <span className="bg-amber-500 text-black text-[9px] font-extrabold tracking-widest px-2.5 py-1 rounded-md uppercase">
+              <div className="absolute bottom-3 left-6 flex items-end space-x-2">
+                <span className="bg-amber-500 text-black text-[9px] font-extrabold tracking-widest px-2 py-0.5 rounded uppercase">
                   {selectedWarezContent.type === 'movie' ? 'FILME' : 'SÉRIE'}
                 </span>
-                <span className="bg-zinc-900 border border-zinc-800 text-gray-300 text-[9px] font-bold px-2.5 py-1 rounded-md font-mono">
+                <span className="bg-zinc-900 border border-zinc-800 text-gray-300 text-[9px] font-bold px-2 py-0.5 rounded font-mono">
                   ID: {selectedWarezContent.tmdbId}
                 </span>
               </div>
@@ -1108,28 +1124,38 @@ export default function App() {
                 switch (embedSource) {
                   case 'servidor_1':
                     embedUrl = type === 'movie'
-                      ? `https://${warezDomain}/filme/${tmdbId}`
-                      : `https://${warezDomain}/serie/${tmdbId}/${s}/${e}`;
+                      ? `https://superembed.cc/embed/movie/${tmdbId}`
+                      : `https://superembed.cc/embed/tv/${tmdbId}/${s}/${e}`;
                     break;
                   case 'servidor_2':
+                    embedUrl = type === 'movie'
+                      ? `https://embedder.net/e/movie/${tmdbId}`
+                      : `https://embedder.net/e/tv/${tmdbId}/${s}/${e}`;
+                    break;
+                  case 'servidor_3':
                     embedUrl = type === 'movie'
                       ? `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1`
                       : `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1&s=${s}&e=${e}`;
                     break;
-                  case 'servidor_3':
+                  case 'servidor_4':
                     embedUrl = type === 'movie'
                       ? `https://vidsrc.xyz/embed/movie/${tmdbId}`
                       : `https://vidsrc.xyz/embed/tv/${tmdbId}/${s}/${e}`;
                     break;
-                  case 'servidor_4':
+                  case 'servidor_5':
                     embedUrl = type === 'movie'
                       ? `https://vidsrc.to/embed/movie/${tmdbId}`
                       : `https://vidsrc.to/embed/tv/${tmdbId}/${s}/${e}`;
                     break;
+                  case 'servidor_6':
+                    embedUrl = type === 'movie'
+                      ? `https://player.videasy.to/movie/${tmdbId}`
+                      : `https://player.videasy.to/tv/${tmdbId}/${s}/${e}`;
+                    break;
                   default:
                     embedUrl = type === 'movie'
-                      ? `https://${warezDomain}/filme/${tmdbId}`
-                      : `https://${warezDomain}/serie/${tmdbId}/${s}/${e}`;
+                      ? `https://player.videasy.to/movie/${tmdbId}`
+                      : `https://player.videasy.to/tv/${tmdbId}/${s}/${e}`;
                     break;
                 }
 
@@ -1181,6 +1207,14 @@ export default function App() {
                       <p className="text-[10px] font-mono text-zinc-400 uppercase font-black">SERVIDOR ATIVO:</p>
                       <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
                         <button
+                          onClick={() => setEmbedSource('servidor_6')}
+                          className={`px-3 py-2 rounded-lg border text-[11px] font-bold transition text-left sm:text-center ${
+                            embedSource === 'servidor_6' ? 'bg-amber-500 text-black border-amber-500' : 'bg-zinc-950 text-zinc-400 border-zinc-850 hover:bg-zinc-900'
+                          }`}
+                        >
+                          🇧🇷 Videasy (Destaque)
+                        </button>
+                        <button
                           onClick={() => setEmbedSource('servidor_1')}
                           className={`px-3 py-2 rounded-lg border text-[11px] font-bold transition text-left sm:text-center ${
                             embedSource === 'servidor_1' ? 'bg-amber-500 text-black border-amber-500' : 'bg-zinc-950 text-zinc-400 border-zinc-850 hover:bg-zinc-900'
@@ -1194,7 +1228,7 @@ export default function App() {
                             embedSource === 'servidor_2' ? 'bg-amber-500 text-black border-amber-500' : 'bg-zinc-950 text-zinc-400 border-zinc-850 hover:bg-zinc-900'
                           }`}
                         >
-                          🌐 Servidor 2 (Multi-Áudio)
+                          🇧🇷 Servidor 2 (Dublado Alt)
                         </button>
                         <button
                           onClick={() => setEmbedSource('servidor_3')}
@@ -1202,7 +1236,7 @@ export default function App() {
                             embedSource === 'servidor_3' ? 'bg-amber-500 text-black border-amber-500' : 'bg-zinc-950 text-zinc-400 border-zinc-850 hover:bg-zinc-900'
                           }`}
                         >
-                          🇺🇸 Servidor 3 (Original)
+                          🌐 Servidor 3 (Multi-Áudio)
                         </button>
                         <button
                           onClick={() => setEmbedSource('servidor_4')}
@@ -1210,7 +1244,15 @@ export default function App() {
                             embedSource === 'servidor_4' ? 'bg-amber-500 text-black border-amber-500' : 'bg-zinc-950 text-zinc-400 border-zinc-850 hover:bg-zinc-900'
                           }`}
                         >
-                          🇺🇸 Servidor 4 (VidSrc TO)
+                          🇺🇸 Servidor 4 (Original)
+                        </button>
+                        <button
+                          onClick={() => setEmbedSource('servidor_5')}
+                          className={`px-3 py-2 rounded-lg border text-[11px] font-bold transition text-left sm:text-center ${
+                            embedSource === 'servidor_5' ? 'bg-amber-500 text-black border-amber-500' : 'bg-zinc-950 text-zinc-400 border-zinc-850 hover:bg-zinc-900'
+                          }`}
+                        >
+                          🇺🇸 Servidor 5 (VidSrc TO)
                         </button>
                       </div>
                     </div>
@@ -1230,7 +1272,7 @@ export default function App() {
                   </div>
 
                   {/* Right metadata */}
-                  <div className="md:col-span-2 space-y-4">
+                  <div className="md:col-span-2 space-y-4 flex flex-col justify-between">
                     <div>
                       <h3 className="text-xl font-extrabold text-white leading-tight">{selectedWarezContent.title}</h3>
                       <div className="flex items-center space-x-2 text-[11px] text-zinc-400 mt-1">
@@ -1242,41 +1284,48 @@ export default function App() {
                       </div>
                     </div>
 
-                    <p className="text-xs text-zinc-300 leading-relaxed bg-zinc-900/30 p-3.5 rounded-xl border border-zinc-900">
-                      {selectedWarezContent.synopsis}
-                    </p>
-
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => toggleWatchlist(selectedWarezContent)}
-                        className={`px-4 py-2 rounded-xl border text-xs font-bold transition cursor-pointer ${
-                          isFavorited(selectedWarezContent.id)
-                            ? 'bg-amber-500/10 border-amber-500 text-amber-500'
-                            : 'bg-zinc-950 border-zinc-850 text-zinc-300 hover:text-white'
-                        }`}
-                      >
-                        {isFavorited(selectedWarezContent.id) ? '✓ Na Minha Lista' : '+ Salvar Lista'}
-                      </button>
-                    </div>
-
-                    {/* Movie vs Series Stream Selectors */}
+                    {/* Movie vs Series Stream Selectors - PLACED AT THE TOP FOR IMMEDIATE ACCESSIBILITY ON TV SCALED LAYOUTS */}
                     {selectedWarezContent.type === 'movie' ? (
-                      <button
-                        onClick={() => setActiveWarezPlayer({
-                          tmdbId: selectedWarezContent.tmdbId,
-                          imdbId: selectedWarezContent.imdbId,
-                          title: selectedWarezContent.title,
-                          type: 'movie'
-                        })}
-                        className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black text-xs py-3.5 rounded-xl uppercase tracking-wider transition cursor-pointer"
-                      >
-                        Reproduzir Filme em HD 
-                      </button>
+                      <div className="flex flex-col sm:flex-row gap-2.5">
+                        <button
+                          onClick={() => setActiveWarezPlayer({
+                            tmdbId: selectedWarezContent.tmdbId,
+                            imdbId: selectedWarezContent.imdbId,
+                            title: selectedWarezContent.title,
+                            type: 'movie'
+                          })}
+                          className="flex-grow bg-amber-500 hover:bg-amber-400 text-black font-black text-xs py-3 rounded-xl uppercase tracking-wider transition cursor-pointer text-center"
+                        >
+                          Reproduzir Filme em HD 
+                        </button>
+                        <button
+                          onClick={() => toggleWatchlist(selectedWarezContent)}
+                          className={`px-4 py-3 rounded-xl border text-xs font-bold transition cursor-pointer ${
+                            isFavorited(selectedWarezContent.id)
+                              ? 'bg-amber-500/10 border-amber-500 text-amber-500'
+                              : 'bg-zinc-950 border-zinc-850 text-zinc-300 hover:text-white'
+                          }`}
+                        >
+                          {isFavorited(selectedWarezContent.id) ? '✓ Na Lista' : '+ Salvar Lista'}
+                        </button>
+                      </div>
                     ) : (
-                      <div className="space-y-4 bg-zinc-900/40 p-4 rounded-xl border border-zinc-850">
-                        <h4 className="text-xs font-bold uppercase text-white tracking-wider">Selecione o Episódio</h4>
+                      <div className="space-y-3 bg-zinc-900/40 p-3.5 rounded-xl border border-zinc-850">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-bold uppercase text-white tracking-wider">Selecione o Episódio</h4>
+                          <button
+                            onClick={() => toggleWatchlist(selectedWarezContent)}
+                            className={`px-3 py-1 rounded-lg border text-[10px] font-bold transition cursor-pointer ${
+                              isFavorited(selectedWarezContent.id)
+                                ? 'bg-amber-500/10 border-amber-500 text-amber-500'
+                                : 'bg-zinc-950 border-zinc-850 text-zinc-300 hover:text-white'
+                            }`}
+                          >
+                            {isFavorited(selectedWarezContent.id) ? '✓ Na Lista' : '+ Salvar Lista'}
+                          </button>
+                        </div>
+                        
                         <div className="grid grid-cols-2 gap-3">
-                          
                           <div className="space-y-1">
                             <span className="text-[10px] text-zinc-500 font-mono">TEMPORADA:</span>
                             <select
@@ -1285,7 +1334,7 @@ export default function App() {
                                 setSelectedWarezSeason(parseInt(e.target.value, 10));
                                 setSelectedWarezEpisode(1);
                               }}
-                              className="w-full bg-zinc-950 border border-zinc-800 text-xs text-white rounded-lg px-2.5 py-2 focus:outline-none"
+                              className="w-full bg-zinc-950 border border-zinc-800 text-xs text-white rounded-lg px-2.5 py-1.5 focus:outline-none"
                             >
                               {Array.from({ length: dynamicSeasonsCount }, (_, i) => i + 1).map(s => (
                                 <option key={s} value={s}>Temporada {s}</option>
@@ -1298,14 +1347,13 @@ export default function App() {
                             <select
                               value={selectedWarezEpisode}
                               onChange={(e) => setSelectedWarezEpisode(parseInt(e.target.value, 10))}
-                              className="w-full bg-zinc-950 border border-zinc-800 text-xs text-white rounded-lg px-2.5 py-2 focus:outline-none"
+                              className="w-full bg-zinc-950 border border-zinc-800 text-xs text-white rounded-lg px-2.5 py-1.5 focus:outline-none"
                             >
                               {Array.from({ length: dynamicEpisodesCount }, (_, i) => i + 1).map(e => (
                                 <option key={e} value={e}>Episódio {e}</option>
                               ))}
                             </select>
                           </div>
-
                         </div>
 
                         <button
@@ -1317,12 +1365,20 @@ export default function App() {
                             season: selectedWarezSeason,
                             episode: selectedWarezEpisode
                           })}
-                          className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black text-xs py-3 rounded-xl uppercase transition cursor-pointer"
+                          className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black text-xs py-2.5 rounded-xl uppercase transition cursor-pointer"
                         >
                           Sintonizar Episódio
                         </button>
                       </div>
                     )}
+
+                    {/* Synopsis Box placed underneath, scrollable to prevent any below-the-fold layout issues */}
+                    <div className="bg-zinc-900/30 p-3 rounded-xl border border-zinc-900 flex-grow max-h-24 md:max-h-32 overflow-y-auto scrollbar-thin">
+                      <p className="text-[10px] font-mono text-zinc-500 uppercase font-black mb-1">Sinopse:</p>
+                      <p className="text-xs text-zinc-300 leading-relaxed">
+                        {selectedWarezContent.synopsis || "Sem sinopse disponível."}
+                      </p>
+                    </div>
 
                   </div>
                 </div>
