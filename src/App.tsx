@@ -9,7 +9,7 @@ import LiveTvPlayer from './components/LiveTvPlayer';
 
 export default function App() {
   // Navigation
-  const [activeTab, setActiveTab] = useState<'warez' | 'tv' | 'watchlist'>('warez');
+  const [activeTab, setActiveTab] = useState<'warez' | 'tv' | 'watchlist'>('watchlist');
   
   // Ref to track if sintonizing a channel clicked from watchlist to prevent overwriting
   const watchlistSelectionRef = useRef<string | null>(null);
@@ -19,6 +19,30 @@ export default function App() {
     const saved = localStorage.getItem('warez_watchlist_v2');
     return saved ? JSON.parse(saved) : [];
   });
+
+  // Continue Watching (Local Storage)
+  const [continueWatching, setContinueWatching] = useState<any[]>(() => {
+    const saved = localStorage.getItem('warez_continue_watching');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Function to add content to continue watching list
+  const addToContinueWatching = (item: any) => {
+    setContinueWatching(prev => {
+      const filtered = prev.filter(p => {
+        if (item.type === 'tv' && p.type === 'tv') {
+          return p.id !== item.id;
+        }
+        if (item.type !== 'tv' && p.type !== 'tv') {
+          return p.tmdbId !== item.tmdbId;
+        }
+        return true;
+      });
+      const updated = [item, ...filtered].slice(0, 10); // Keep up to 10 items
+      localStorage.setItem('warez_continue_watching', JSON.stringify(updated));
+      return updated;
+    });
+  };
 
   // Active Video Player States
   const [activeVideo, setActiveVideo] = useState<any | null>(null);
@@ -40,7 +64,7 @@ export default function App() {
   // Warez CDN Integration States
   const [warezQuery, setWarezQuery] = useState('');
   const [warezResults, setWarezResults] = useState<any[]>([]);
-  const [selectedTypeFilter, setSelectedTypeFilter] = useState<'all' | 'movie' | 'series' | 'kids'>('all');
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<'all' | 'movie' | 'series' | 'kids' | 'lançamentos' | 'acao' | 'comedia' | 'terror' | 'drama'>('all');
   const [isSearchingWarez, setIsSearchingWarez] = useState(false);
   const [selectedWarezContent, setSelectedWarezContent] = useState<any | null>(null);
   const [selectedWarezSeason, setSelectedWarezSeason] = useState<number>(1);
@@ -110,12 +134,46 @@ export default function App() {
   const [focusedSection, setFocusedSection] = useState<'sidebar' | 'grid' | 'modal'>('sidebar');
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
   const [lastRemoteAction, setLastRemoteAction] = useState<string>('');
-  const [showRemote, setShowRemote] = useState<boolean>(true);
 
   // Sync Watchlist
   useEffect(() => {
     localStorage.setItem('warez_watchlist_v2', JSON.stringify(watchlist));
   }, [watchlist]);
+
+  // Track Active Channel for Continue Watching
+  useEffect(() => {
+    if (activeChannel) {
+      addToContinueWatching({
+        id: activeChannel.id,
+        name: activeChannel.name,
+        logo: activeChannel.logo,
+        url: activeChannel.url,
+        category: activeChannel.category,
+        country: activeChannel.country,
+        nowPlaying: activeChannel.nowPlaying,
+        type: 'tv'
+      });
+    }
+  }, [activeChannel]);
+
+  // Track Active Warez Player for Continue Watching
+  useEffect(() => {
+    if (activeWarezPlayer) {
+      const original = warezResults.find(r => r.tmdbId === activeWarezPlayer.tmdbId) || selectedWarezContent;
+      addToContinueWatching({
+        id: activeWarezPlayer.tmdbId,
+        tmdbId: activeWarezPlayer.tmdbId,
+        imdbId: activeWarezPlayer.imdbId,
+        title: activeWarezPlayer.title,
+        type: activeWarezPlayer.type,
+        season: activeWarezPlayer.season,
+        episode: activeWarezPlayer.episode,
+        posterUrl: original?.posterUrl || original?.image || "https://images.unsplash.com/photo-1440404653325-ab127d49abc1?auto=format&fit=crop&q=80&w=300",
+        year: original?.year || "Full HD",
+        rating: original?.rating || 8.5
+      });
+    }
+  }, [activeWarezPlayer, warezResults]);
 
   const toggleWatchlist = (item: any, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -402,46 +460,61 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [focusedSection, focusedIndex, activeTab, warezResults, iptvChannels, watchlist, selectedWarezContent, selectedWarezSeason, selectedWarezEpisode]);
 
-  // Filter warez results based on selected tab category (YouCine style)
+  // Filter warez results based on selected tab category (Mega Filmes Style)
   const filteredWarezResults = warezResults.filter(item => {
     if (selectedTypeFilter === 'all') return true;
     if (selectedTypeFilter === 'movie') return item.type === 'movie';
     if (selectedTypeFilter === 'series') return item.type === 'series';
     if (selectedTypeFilter === 'kids') {
-      return item.genres && (item.genres.includes('Animação') || item.genres.includes('Fantasia') || item.genres.includes('Comédia'));
+      return item.genres && (item.genres.includes('Animação') || item.genres.includes('Família') || item.genres.includes('Kids'));
+    }
+    if (selectedTypeFilter === 'lançamentos') {
+      return item.year && (parseInt(item.year, 10) >= 2023 || item.year.includes('2024') || item.year.includes('2025') || item.year.includes('2026'));
+    }
+    if (selectedTypeFilter === 'acao') {
+      return item.genres && (item.genres.includes('Ação') || item.genres.includes('Aventura'));
+    }
+    if (selectedTypeFilter === 'comedia') {
+      return item.genres && item.genres.includes('Comédia');
+    }
+    if (selectedTypeFilter === 'terror') {
+      return item.genres && (item.genres.includes('Terror') || item.genres.includes('Suspense') || item.genres.includes('Mistério') || item.genres.includes('Crime'));
+    }
+    if (selectedTypeFilter === 'drama') {
+      return item.genres && item.genres.includes('Drama');
     }
     return true;
   });
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white font-sans flex flex-col md:flex-row relative overflow-x-hidden selection:bg-amber-500 selection:text-black">
+    <div className="min-h-screen bg-zinc-950 text-white font-sans flex flex-col relative overflow-x-hidden selection:bg-amber-500 selection:text-black">
       
       {/* Background Cinematic Atmosphere */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.04),transparent_55%)] pointer-events-none z-0" />
 
-      {/* ================= LEFT SIDEBAR (Netflix/Premium TV App Style) ================= */}
-      <aside className={`w-full md:w-64 bg-zinc-950 border-r border-zinc-900 flex-shrink-0 z-20 flex flex-col justify-between py-6 px-4 relative ${focusedSection === 'sidebar' ? 'ring-2 ring-amber-500/25 bg-zinc-950' : ''}`}>
-        <div className="space-y-8">
+      {/* ================= TOP HEADER BAR (Mega Filmes HD Style) ================= */}
+      <header className={`w-full bg-zinc-900/95 border-b border-zinc-800/80 shrink-0 z-30 sticky top-0 backdrop-blur-md px-4 py-3 sm:py-4 transition-all ${focusedSection === 'sidebar' ? 'ring-2 ring-amber-500/30' : ''}`}>
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           
           {/* Main Logo */}
-          <div className="flex items-center space-x-3 px-2">
+          <div className="flex items-center space-x-3">
             <div className="h-9 w-9 rounded-xl bg-amber-500 flex items-center justify-center shadow-lg shadow-amber-500/20">
               <Play className="text-black ml-0.5 fill-black" size={16} />
             </div>
             <div>
-              <h1 className="text-lg font-black tracking-wider text-white">
-                MEGA<span className="text-amber-500">CINE</span>
+              <h1 className="text-xl font-black tracking-wider text-white uppercase font-sans">
+                MEGA FILMES <span className="text-amber-500">HD</span>
               </h1>
-              <p className="text-[8px] text-zinc-500 font-mono tracking-widest uppercase">OTIMIZADO PARA TV</p>
+              <p className="text-[8px] text-zinc-500 font-mono tracking-widest uppercase font-black">OTIMIZADO PARA SMARTPHONE E TV</p>
             </div>
           </div>
 
-          {/* Navigation Options */}
-          <nav className="space-y-1.5">
+          {/* Navigation Options - Horizontal, simple, and extremely compact */}
+          <nav className="flex items-center gap-1.5 sm:gap-3">
             {[
-              { id: 'warez', label: 'Cinema Warez', icon: Search, desc: 'Filmes e Séries CDN' },
-              { id: 'tv', label: 'Canais TV', icon: Tv, desc: 'IPTV ao vivo HLS' },
-              { id: 'watchlist', label: 'Minha Lista', icon: Heart, desc: 'Favoritos salvos' }
+              { id: 'warez', label: 'Filmes & Séries', icon: Search },
+              { id: 'tv', label: 'Canais de TV', icon: Tv },
+              { id: 'watchlist', label: 'Minha Lista', icon: Heart }
             ].map((menu) => {
               const Icon = menu.icon;
               const isSelected = activeTab === menu.id;
@@ -454,67 +527,30 @@ export default function App() {
                     setActiveTab(menu.id as any);
                     setFocusedSection('sidebar');
                   }}
-                  className={`w-full px-3.5 py-3 rounded-xl flex items-center space-x-3.5 transition duration-150 text-left cursor-pointer group ${
+                  className={`px-3.5 py-2 rounded-xl flex items-center space-x-2 transition duration-150 text-left cursor-pointer group ${
                     isSelected 
-                      ? 'bg-amber-500 text-black font-black shadow-md shadow-amber-500/10' 
-                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
+                      ? 'bg-amber-500 text-black font-extrabold shadow-md shadow-amber-500/15' 
+                      : 'text-zinc-400 hover:text-white bg-zinc-950/40 border border-zinc-850 hover:bg-zinc-900'
                   } ${isFocused ? 'ring-4 ring-amber-400 scale-102 border-amber-500' : ''}`}
                 >
-                  <Icon size={18} className={isSelected ? 'text-black' : 'text-zinc-400 group-hover:text-white'} />
-                  <div>
-                    <span className="text-xs font-bold block uppercase tracking-wide leading-tight">{menu.label}</span>
-                    <span className={`text-[9px] block leading-tight font-medium ${isSelected ? 'text-black/70' : 'text-zinc-500'}`}>
-                      {menu.desc}
-                    </span>
-                  </div>
+                  <Icon size={14} className={isSelected ? 'text-black' : 'text-zinc-400 group-hover:text-white'} />
+                  <span className="text-xs font-bold uppercase tracking-wide leading-tight">{menu.label}</span>
                 </button>
               );
             })}
           </nav>
-        </div>
 
-        {/* Technical TV Info Footer */}
-        <div className="pt-6 border-t border-zinc-900 px-2 space-y-2 text-[10px] text-zinc-500 font-mono">
-          <div className="flex items-center justify-between">
-            <span>SINAL IPTV</span>
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>SERVIDORES</span>
-            <span className="text-zinc-400 font-bold">WAREZCDN</span>
-          </div>
-          <p className="text-[8px] leading-relaxed mt-2 text-zinc-600">Pressione as setas do teclado para simular o controle remoto da TV.</p>
         </div>
-      </aside>
+      </header>
 
       {/* ================= MAIN CONTAINER VIEWPORT ================= */}
-      <main className="flex-grow p-4 md:p-8 z-10 overflow-y-auto max-h-screen relative">
+      <main className="flex-grow p-4 md:p-8 max-w-7xl mx-auto w-full z-10 overflow-y-auto relative">
         
         {/* ================= 1. CINEMA WAREZ (CATALOG SEARCH & STREAM) ================= */}
         {activeTab === 'warez' && (
-          <section id="warez-section" className="space-y-6">
-            <div className="border-b border-zinc-900 pb-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <span className="text-[10px] bg-amber-500/10 text-amber-500 px-3 py-1 rounded-full border border-amber-500/20 uppercase font-black tracking-widest font-mono">SERVIDORES DE CINEMA</span>
-                <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight mt-1">Cinema Geral Integrado</h2>
-                <p className="text-xs text-zinc-400">Pesquise filmes, séries e animes para assistir de graça através dos servidores de streaming WarezCDN.</p>
-              </div>
-
-              {/* Mirror CDN domain picker */}
-              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 flex items-center space-x-2 shrink-0">
-                <span className="text-[9px] font-mono text-zinc-400">ESPELHO CDN:</span>
-                <select 
-                  value={warezDomain}
-                  onChange={(e) => setWarezDomain(e.target.value as any)}
-                  className="bg-zinc-950 border border-zinc-800 text-[10px] text-white rounded-md px-2 py-1 focus:outline-none focus:border-amber-500 font-mono cursor-pointer"
-                >
-                  <option value="embed.warezcdn.lat">warezcdn.lat (Principal)</option>
-                  <option value="embed.warezcdn.link">warezcdn.link (Espelho)</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Search Input Bar */}
+          <section id="warez-section" className="space-y-6 pt-2">
+            
+            {/* Simple Clean Search Input Bar */}
             <form onSubmit={(e) => handleSearchWarez(undefined, e)} className="flex gap-3 max-w-xl">
               <div className="relative flex-grow">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
@@ -523,7 +559,7 @@ export default function App() {
                   placeholder="Ex: Interestelar, Matrix, Breaking Bad, Batman..."
                   value={warezQuery}
                   onChange={(e) => setWarezQuery(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-850 text-xs text-white rounded-xl pl-12 pr-4 py-3.5 focus:outline-none focus:border-amber-500 focus:bg-zinc-900 transition font-medium"
+                  className="w-full bg-zinc-900 border border-zinc-850 text-xs text-white rounded-xl pl-12 pr-4 py-3.5 focus:outline-none focus:border-amber-500 focus:bg-zinc-900 transition font-medium animate-fade-in"
                 />
               </div>
               <button
@@ -538,17 +574,6 @@ export default function App() {
                 )}
               </button>
             </form>
-
-            {/* Catalog Info Banner */}
-            <div className="bg-amber-500/5 border border-amber-500/10 rounded-2xl p-4 text-xs text-zinc-300 max-w-xl flex items-start space-x-3">
-              <div className="text-amber-500 mt-0.5 font-bold shrink-0">ℹ️</div>
-              <div className="space-y-1">
-                <p className="font-bold text-white text-sm">Catálogo WarezCDN Ilimitado!</p>
-                <p className="text-zinc-400 leading-relaxed text-xs">
-                  Os 46 títulos abaixo são os destaques de cinema pré-carregados no painel. O servidor de streaming <strong>WarezCDN possui mais de 100 mil títulos disponíveis</strong>. Digite o nome de qualquer filme, série, anime ou novela no campo de busca para sintonizar a transmissão instantaneamente!
-                </p>
-              </div>
-            </div>
 
             {/* Suggestions buttons */}
             <div className="flex flex-wrap items-center gap-2 text-[10px]">
@@ -647,14 +672,19 @@ export default function App() {
             ) : warezResults.length > 0 ? (
               <div className="space-y-6">
                 
-                {/* YouCine navigation category bar */}
+                {/* Mega Filmes navigation category bar */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-900 pb-3">
                   <div className="flex items-center space-x-1.5 overflow-x-auto scrollbar-none py-1">
                     {[
                       { id: 'all', label: 'INÍCIO' },
                       { id: 'movie', label: 'FILMES' },
                       { id: 'series', label: 'SÉRIES' },
-                      { id: 'kids', label: 'KIDS / ANIME' }
+                      { id: 'lançamentos', label: '🚀 LANÇAMENTOS' },
+                      { id: 'acao', label: 'AÇÃO / AVENTURA' },
+                      { id: 'comedia', label: 'COMÉDIA' },
+                      { id: 'kids', label: 'KIDS / FAMÍLIA' },
+                      { id: 'terror', label: 'TERROR / CRIME' },
+                      { id: 'drama', label: 'DRAMA' }
                     ].map((tab) => {
                       const isActive = selectedTypeFilter === tab.id;
                       return (
@@ -898,6 +928,105 @@ export default function App() {
         {/* ================= 3. WATCHLIST (FAVORITES GRID) ================= */}
         {activeTab === 'watchlist' && (
           <section id="watchlist-section" className="space-y-6">
+            
+            {/* ================= CONTINUE ASSISTINDO SECTION ================= */}
+            {continueWatching.length > 0 && (
+              <div className="space-y-4 pb-6 border-b border-zinc-900 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2.5">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                    </span>
+                    <h3 className="text-xs font-black text-white uppercase tracking-widest font-mono">Continue Assistindo</h3>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setContinueWatching([]);
+                      localStorage.removeItem('warez_continue_watching');
+                    }}
+                    className="text-[9px] text-zinc-500 hover:text-red-400 font-bold transition flex items-center space-x-1 uppercase tracking-widest font-mono cursor-pointer"
+                  >
+                    <span>Limpar Histórico</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center space-x-4 overflow-x-auto scrollbar-none py-2 select-none">
+                  {continueWatching.map((item, idx) => {
+                    return (
+                      <div
+                        key={`cw-${item.id || item.tmdbId || idx}`}
+                        onClick={() => {
+                          if (item.type === 'tv') {
+                            watchlistSelectionRef.current = item.id;
+                            setSelectedIptvCountry(item.country || 'BR');
+                            setSelectedIptvCategory('');
+                            setIptvSearchQuery('');
+                            setActiveChannel(item);
+                            setActiveTab('tv');
+                          } else {
+                            const fullContent = warezResults.find(r => r.tmdbId === item.tmdbId) || {
+                              id: item.tmdbId,
+                              tmdbId: item.tmdbId,
+                              imdbId: item.imdbId,
+                              title: item.parentTitle || item.title,
+                              type: item.type === 'series' ? 'series' : 'movie',
+                              posterUrl: item.posterUrl,
+                              year: item.year,
+                              rating: item.rating
+                            };
+                            setSelectedWarezContent(fullContent);
+                            setSelectedWarezSeason(item.season || 1);
+                            setSelectedWarezEpisode(item.episode || 1);
+                            setActiveWarezPlayer({
+                              tmdbId: item.tmdbId,
+                              imdbId: item.imdbId,
+                              title: item.title,
+                              type: item.type,
+                              season: item.season,
+                              episode: item.episode
+                            });
+                          }
+                        }}
+                        className="group flex-shrink-0 w-36 sm:w-40 bg-zinc-900/40 hover:bg-zinc-900/90 border border-zinc-850 hover:border-amber-500/50 rounded-xl overflow-hidden cursor-pointer shadow-lg transition-all duration-300 transform hover:-translate-y-1"
+                      >
+                        <div className="aspect-[16/10] w-full relative bg-zinc-950 overflow-hidden">
+                          {item.type === 'tv' ? (
+                            <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-zinc-900 to-zinc-950 text-amber-500 p-2 text-center">
+                              <Tv size={24} className="animate-pulse" />
+                              <span className="text-[9px] font-mono font-bold mt-1 uppercase text-zinc-400">TV Ao Vivo</span>
+                            </div>
+                          ) : (
+                            <img
+                              src={item.posterUrl}
+                              alt={item.title}
+                              className="w-full h-full object-cover object-center group-hover:scale-105 transition duration-500"
+                              referrerPolicy="no-referrer"
+                            />
+                          )}
+                          
+                          {/* Play overlay hover indicator */}
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition duration-200 flex items-center justify-center">
+                            <Play size={18} className="text-amber-500 fill-amber-500" />
+                          </div>
+                        </div>
+
+                        <div className="p-2.5 space-y-1">
+                          <p className="font-bold text-[10px] text-white truncate group-hover:text-amber-400 transition">
+                            {item.name || item.title}
+                          </p>
+                          <div className="flex items-center justify-between text-[8px] text-zinc-500 uppercase tracking-wider font-mono">
+                            <span>{item.type === 'tv' ? '📺 TV' : item.type === 'series' ? `🍿 T${item.season} E${item.episode}` : '🎬 FILME'}</span>
+                            {item.rating && <span className="text-amber-500 font-bold">★ {item.rating}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="border-b border-zinc-900 pb-5">
               <span className="text-[10px] bg-amber-500/10 text-amber-500 px-3 py-1 rounded-full border border-amber-500/20 uppercase font-black tracking-widest font-mono">MINHA LISTA</span>
               <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight mt-1">Sua Biblioteca Salva</h2>
@@ -982,92 +1111,7 @@ export default function App() {
 
       </main>
 
-      {/* ==================== FLOATING VIRTUAL TV REMOTE (Apple TV / Firestick style) ==================== */}
-      {showRemote && (
-        <div className="hidden xl:flex fixed right-6 bottom-6 flex-col items-center bg-zinc-900/95 backdrop-blur-md border border-zinc-800 p-5 rounded-3xl w-56 shadow-2xl z-40 space-y-4 text-center select-none">
-          <div className="flex items-center justify-between w-full pb-2 border-b border-zinc-800/60">
-            <span className="text-[9px] font-black tracking-widest text-zinc-400 uppercase font-mono">CONTROLE DA TV</span>
-            <button 
-              onClick={() => setShowRemote(false)} 
-              className="text-[10px] text-zinc-500 hover:text-white"
-            >
-              ✕
-            </button>
-          </div>
 
-          {/* Core Directional Ring */}
-          <div className="relative w-36 h-36 bg-zinc-950 rounded-full flex items-center justify-center p-3 border border-zinc-850 shadow-inner">
-            
-            {/* directional pad buttons */}
-            <button
-              onClick={() => triggerRemoteAction('UP')}
-              className={`absolute top-2 text-zinc-400 hover:text-amber-400 transition duration-100 ${lastRemoteAction === 'UP' ? 'scale-90 text-amber-400' : ''}`}
-            >
-              <ChevronUp size={24} />
-            </button>
-            <button
-              onClick={() => triggerRemoteAction('DOWN')}
-              className={`absolute bottom-2 text-zinc-400 hover:text-amber-400 transition duration-100 ${lastRemoteAction === 'DOWN' ? 'scale-90 text-amber-400' : ''}`}
-            >
-              <ChevronDown size={24} />
-            </button>
-            <button
-              onClick={() => triggerRemoteAction('LEFT')}
-              className={`absolute left-2 text-zinc-400 hover:text-amber-400 transition duration-100 ${lastRemoteAction === 'LEFT' ? 'scale-90 text-amber-400' : ''}`}
-            >
-              <ChevronLeft size={24} />
-            </button>
-            <button
-              onClick={() => triggerRemoteAction('RIGHT')}
-              className={`absolute right-2 text-zinc-400 hover:text-amber-400 transition duration-100 ${lastRemoteAction === 'RIGHT' ? 'scale-90 text-amber-400' : ''}`}
-            >
-              <ChevronRight size={24} />
-            </button>
-
-            {/* OK Inner Button */}
-            <button
-              onClick={() => triggerRemoteAction('OK')}
-              className={`h-16 w-16 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-full flex items-center justify-center text-[11px] font-black text-white hover:text-amber-400 shadow-lg active:scale-95 transition ${lastRemoteAction === 'OK' ? 'bg-amber-500 text-black border-amber-500' : ''}`}
-            >
-              OK
-            </button>
-          </div>
-
-          {/* Action Row */}
-          <div className="grid grid-cols-2 gap-3 w-full">
-            <button
-              onClick={() => triggerRemoteAction('BACK')}
-              className={`py-2 px-3 bg-zinc-950 border border-zinc-850 rounded-xl text-[10px] font-bold text-zinc-400 hover:text-white transition active:scale-95 ${lastRemoteAction === 'BACK' ? 'bg-zinc-800 text-white' : ''}`}
-            >
-              VOLTAR
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('warez');
-                setFocusedSection('sidebar');
-              }}
-              className="py-2 px-3 bg-zinc-950 border border-zinc-850 rounded-xl text-[10px] font-bold text-zinc-400 hover:text-white transition active:scale-95"
-            >
-              INÍCIO
-            </button>
-          </div>
-          
-          <div className="text-[8px] text-zinc-500 font-mono">
-            <span>Foco: <strong className="text-zinc-300 uppercase">{focusedSection}</strong></span>
-          </div>
-        </div>
-      )}
-
-      {/* Button to restore remote if closed */}
-      {!showRemote && (
-        <button
-          onClick={() => setShowRemote(true)}
-          className="hidden xl:flex fixed right-6 bottom-6 bg-zinc-900 hover:bg-zinc-850 border border-zinc-850 text-zinc-400 hover:text-white p-3 rounded-full shadow-2xl z-40 transition"
-          title="Abrir Controle Virtual"
-        >
-          <Tv size={20} />
-        </button>
-      )}
 
       {/* ================= DETAILS MODAL FOR WAREZ CONTENT ================= */}
       {selectedWarezContent && (
