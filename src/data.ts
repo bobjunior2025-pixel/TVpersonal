@@ -147,11 +147,12 @@ export interface LiveChannel {
   name: string;
   logo: string;
   videoUrl: string; // m3u8 HLS streams reais de canais públicos do Brasil
-  category: 'Filmes' | 'Notícias' | 'Esportes' | 'Documentários' | 'Infantil';
+  category: string;
   nowPlaying: string;
   nextShow: string;
   ticker: string[];
   country?: string;
+  status?: 'unknown' | 'working' | 'broken';
 }
 
 export const LIVE_CHANNELS: LiveChannel[] = [

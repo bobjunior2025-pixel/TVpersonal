@@ -71,11 +71,11 @@ async function fetchWithKeyRotation(endpoint: string): Promise<any> {
         return await res.json();
       } else {
         const text = await res.text().catch(() => '');
-        console.error(`[TMDB] Key failed with status ${res.status}: ${text.substring(0, 100)}`);
+        console.warn(`[TMDB] Key rotation status ${res.status}: ${text.substring(0, 100)}`);
         lastError = new Error(`Status ${res.status}: ${text}`);
       }
     } catch (err: any) {
-      console.error(`[TMDB] Fetch error for key:`, err?.message || err);
+      console.warn(`[TMDB] Fetch warning for key:`, err?.message || err);
       lastError = err;
     }
   }
@@ -1007,6 +1007,7 @@ interface IPTVChannel {
   nowPlaying: string;
   nextShow: string;
   ticker: string[];
+  status?: 'unknown' | 'working' | 'broken';
 }
 
 const defaultChannels: IPTVChannel[] = [
@@ -1091,10 +1092,21 @@ let cachedChannels: IPTVChannel[] = [...defaultChannels];
 let isFetchingIPTV = false;
 let iptvError = '';
 
+function getAttributeValue(line: string, attribute: string): string {
+  const marker = `${attribute}="`;
+  const start = line.indexOf(marker);
+  if (start === -1) return '';
+  const valStart = start + marker.length;
+  const end = line.indexOf('"', valStart);
+  if (end === -1) return '';
+  return line.substring(valStart, end);
+}
+
 function parseM3U(m3uContent: string): IPTVChannel[] {
   const channels: IPTVChannel[] = [];
   const lines = m3uContent.split('\n');
   let currentChannel: Partial<IPTVChannel> | null = null;
+  const seenIdsInPlaylist = new Set<string>();
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -1103,27 +1115,34 @@ function parseM3U(m3uContent: string): IPTVChannel[] {
     if (line.startsWith('#EXTINF:')) {
       currentChannel = {};
       
-      // Extract tvg-id
-      const idMatch = line.match(/tvg-id="([^"]*)"/i);
-      // Extract tvg-logo
-      const logoMatch = line.match(/tvg-logo="([^"]*)"/i);
-      // Extract group-title
-      const groupMatch = line.match(/group-title="([^"]*)"/i);
-      // Extract tvg-country
-      const countryMatch = line.match(/tvg-country="([^"]*)"/i);
+      const idVal = getAttributeValue(line, 'tvg-id');
+      const logoVal = getAttributeValue(line, 'tvg-logo');
+      const groupVal = getAttributeValue(line, 'group-title');
+      const countryVal = getAttributeValue(line, 'tvg-country');
       
-      // Channel name is the text after the last comma
       const commaIndex = line.lastIndexOf(',');
       let name = '';
       if (commaIndex !== -1) {
         name = line.substring(commaIndex + 1).trim();
       }
       
-      currentChannel.name = name || 'Canal Sem Nome';
-      currentChannel.id = idMatch ? idMatch[1] : `ch_${Math.random().toString(36).substr(2, 9)}`;
-      currentChannel.logo = logoMatch ? logoMatch[1] : '';
-      currentChannel.category = groupMatch ? groupMatch[1] : 'Geral';
-      currentChannel.country = countryMatch ? countryMatch[1] : '';
+      const parsedName = name || 'Canal Sem Nome';
+      currentChannel.name = parsedName;
+      
+      // Ensure unique ID across the playlist
+      let finalId = idVal;
+      if (!finalId || seenIdsInPlaylist.has(finalId)) {
+        // Fallback to name-based or random to be consistent but unique
+        const cleanNameId = parsedName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const randPart = Math.random().toString(36).substring(2, 6);
+        finalId = `${cleanNameId || 'ch'}_${randPart}`;
+      }
+      seenIdsInPlaylist.add(finalId);
+      
+      currentChannel.id = finalId;
+      currentChannel.logo = logoVal;
+      currentChannel.category = groupVal || 'Geral';
+      currentChannel.country = countryVal;
       
       if (!currentChannel.country && currentChannel.id) {
         const idParts = currentChannel.id.split('.');
@@ -1140,7 +1159,7 @@ function parseM3U(m3uContent: string): IPTVChannel[] {
       if (line.startsWith('http://') || line.startsWith('https://')) {
         const name = currentChannel.name || 'Canal Sem Nome';
         const finalChannel: IPTVChannel = {
-          id: currentChannel.id || `ch_${Math.random().toString(36).substr(2, 9)}`,
+          id: currentChannel.id || `ch_${Math.random().toString(36).substring(2, 8)}`,
           name: name,
           logo: currentChannel.logo || '',
           videoUrl: line,
@@ -1155,6 +1174,11 @@ function parseM3U(m3uContent: string): IPTVChannel[] {
           ]
         };
         channels.push(finalChannel);
+        
+        // Safety cap per playlist to keep memory footprint safe and UI responsive
+        if (channels.length >= 1200) {
+          break;
+        }
       }
       currentChannel = null;
     }
@@ -1188,7 +1212,8 @@ async function fetchIPTVChannels() {
     const playlists = [
       { name: 'amer.m3u', url: 'https://iptv-org.github.io/iptv/regions/amer.m3u', defaultCountry: 'US' },
       { name: 'br.m3u', url: 'https://iptv-org.github.io/iptv/countries/br.m3u', defaultCountry: 'BR' },
-      { name: 'custom-br.m3u', url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisBR01.m3u8', defaultCountry: 'BR' }
+      { name: 'custom-br.m3u', url: 'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/refs/heads/master/CanaisBR06.m3u8', defaultCountry: 'BR' },
+      { name: 'canais-full.m3u', url: 'https://gist.githubusercontent.com/BrasilChannel/77d80bf7b68011726d2a34ca9c6ad219/raw/c973a6df2aec707f6f37a1403464e7560d1343d2/Canais%2520Full', defaultCountry: 'OUTROS' }
     ];
 
     const fetchPromises = playlists.map(async (playlist) => {
@@ -1198,7 +1223,7 @@ async function fetchIPTVChannels() {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
           }
-        }, 6000);
+        }, 12000);
         if (!response.ok) {
           throw new Error(`Falha status ${response.status}`);
         }
@@ -1210,6 +1235,8 @@ async function fetchIPTVChannels() {
         parsed.forEach(ch => {
           if (playlist.defaultCountry === 'BR') {
             ch.country = 'BR';
+          } else if (playlist.defaultCountry === 'OUTROS') {
+            ch.country = 'OUTROS';
           } else if (!ch.country) {
             ch.country = playlist.defaultCountry;
           }
@@ -1239,6 +1266,11 @@ async function fetchIPTVChannels() {
 
       cachedChannels = uniqueChannels;
       console.log(`Sucesso! ${cachedChannels.length} canais carregados no cache (deduplicados).`);
+      
+      // Start testing background loop if not already running
+      if (!isTesterRunning) {
+        runAutoTester().catch(err => console.error('Tester trigger error:', err));
+      }
     } else {
       throw new Error('Nenhum canal pôde ser extraído das playlists.');
     }
@@ -1250,56 +1282,394 @@ async function fetchIPTVChannels() {
   }
 }
 
+// ================= +IPTV PLAYLIST SUPPORT & AUTOMATIC TESTING SYSTEM =================
+let cachedPlusChannels: IPTVChannel[] = [];
+let isFetchingPlusIPTV = false;
+let plusIptvError = '';
+
+let activeTestJobs: { [channelId: string]: boolean } = {};
+let totalTestedCount = 0;
+let isTesterRunning = false;
+
+async function testStreamUrl(streamUrl: string): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    
+    const response = await fetch(streamUrl, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    // We only care about headers, abort immediately to not consume bandwidth or stay connected
+    try {
+      controller.abort();
+    } catch (e) {}
+
+    if (response.ok || (response.status >= 200 && response.status < 400)) {
+      return true;
+    }
+    return false;
+  } catch (err) {
+    return false;
+  }
+}
+
+async function testAndSetChannelStatus(channel: IPTVChannel) {
+  if (!channel || activeTestJobs[channel.id]) return;
+  activeTestJobs[channel.id] = true;
+  
+  try {
+    const isWorking = await testStreamUrl(channel.videoUrl);
+    channel.status = isWorking ? 'working' : 'broken';
+  } catch {
+    channel.status = 'broken';
+  } finally {
+    delete activeTestJobs[channel.id];
+    totalTestedCount++;
+  }
+}
+
+async function runAutoTester() {
+  if (isTesterRunning) return;
+  isTesterRunning = true;
+  console.log('Background IPTV auto-tester started.');
+  
+  try {
+    while (true) {
+      // Find untested channels in default / cached channels
+      const untestedDefault = cachedChannels.filter(ch => !ch.status || ch.status === 'unknown');
+      const untestedPlus = cachedPlusChannels.filter(ch => !ch.status || ch.status === 'unknown');
+      
+      if (untestedDefault.length === 0 && untestedPlus.length === 0) {
+        // If everything is tested, sleep and then re-test random ones or sleep longer
+        await new Promise(resolve => setTimeout(resolve, 30000));
+        
+        // Occasionally mark some older "working" or "broken" channels as unknown to re-verify them
+        const working = [...cachedChannels, ...cachedPlusChannels].filter(ch => ch.status === 'working' || ch.status === 'broken');
+        if (working.length > 0) {
+          // Reset 5 random ones to re-verify continuously
+          for (let i = 0; i < Math.min(5, working.length); i++) {
+            const idx = Math.floor(Math.random() * working.length);
+            working[idx].status = 'unknown';
+          }
+        }
+        continue;
+      }
+      
+      // Select a batch of up to 4 channels to test concurrently (balanced)
+      const batch: IPTVChannel[] = [];
+      if (untestedDefault.length > 0) {
+        batch.push(...untestedDefault.slice(0, 2));
+      }
+      if (untestedPlus.length > 0) {
+        batch.push(...untestedPlus.slice(0, 2));
+      }
+      
+      if (batch.length === 0) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        continue;
+      }
+      
+      // Test the batch concurrently
+      await Promise.all(batch.map(ch => testAndSetChannelStatus(ch)));
+      
+      // Small defensive delay to avoid spamming target servers
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    }
+  } catch (err) {
+    console.error('Auto IPTV tester loop error:', err);
+    isTesterRunning = false;
+  }
+}
+
+async function fetchPlusIPTVChannels() {
+  if (isFetchingPlusIPTV) return;
+  isFetchingPlusIPTV = true;
+  plusIptvError = '';
+  try {
+    console.log('Fetching +IPTV channels from Canais Full Gist...');
+    const playlistUrl = 'https://gist.githubusercontent.com/BrasilChannel/77d80bf7b68011726d2a34ca9c6ad219/raw/c973a6df2aec707f6f37a1403464e7560d1343d2/Canais%2520Full';
+    
+    const response = await fetchWithTimeout(playlistUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    }, 12000);
+    
+    if (!response.ok) {
+      throw new Error(`Falha ao carregar playlist +IPTV: status ${response.status}`);
+    }
+    
+    const text = await response.text();
+    console.log(`Playlist +IPTV carregada: ${(text.length / 1024).toFixed(1)} KB`);
+    const parsed = parseM3U(text);
+    
+    // Force BR country and add status
+    parsed.forEach(ch => {
+      ch.country = 'BR';
+      ch.status = 'unknown';
+    });
+
+    if (parsed.length > 0) {
+      // Deduplicate by videoUrl
+      const seenUrls = new Set<string>();
+      const uniqueChannels: IPTVChannel[] = [];
+      for (const ch of parsed) {
+        if (!seenUrls.has(ch.videoUrl)) {
+          seenUrls.add(ch.videoUrl);
+          uniqueChannels.push(ch);
+        }
+      }
+      cachedPlusChannels = uniqueChannels;
+      console.log(`Sucesso! ${cachedPlusChannels.length} canais +IPTV carregados no cache.`);
+      
+      // Kick off tester
+      if (!isTesterRunning) {
+        runAutoTester().catch(err => console.error('Tester trigger error:', err));
+      }
+    } else {
+      throw new Error('Nenhum canal pôde ser extraído da playlist +IPTV.');
+    }
+  } catch (error: any) {
+    console.error('Erro ao carregar +IPTV:', error);
+    plusIptvError = error.message || 'Erro de rede ao carregar +IPTV.';
+  } finally {
+    isFetchingPlusIPTV = false;
+  }
+}
+
+
 // REST endpoints for TV Channels
 app.get('/api/iptv/channels', async (req, res) => {
-  // If we only have the default channels and aren't fetching, and we are NOT on Vercel,
-  // we can fire off a background fetch to populate the rest of the playlist.
-  if (cachedChannels.length === defaultChannels.length && !isFetchingIPTV && !process.env.VERCEL) {
-    fetchIPTVChannels().catch(err => {});
+  try {
+    // If we only have the default channels and aren't fetching, and we are NOT on Vercel,
+    // we can fire off a background fetch to populate the rest of the playlist.
+    if (cachedChannels.length === defaultChannels.length && !isFetchingIPTV && !process.env.VERCEL) {
+      fetchIPTVChannels().catch(err => {
+        console.error('Background fetchIPTVChannels error:', err);
+      });
+    }
+
+    const { country, category, search, limit = '60', offset = '0', onlyWorking } = req.query;
+    let result = [...cachedChannels];
+
+    // Filters with high type safety and defensive checks
+    if (onlyWorking === 'true') {
+      result = result.filter(ch => ch && ch.status === 'working');
+    }
+
+    if (country) {
+      const cUpper = String(country).toUpperCase();
+      result = result.filter(ch => ch && ch.country && String(ch.country).toUpperCase() === cUpper);
+    }
+
+    if (category) {
+      const catLower = String(category).toLowerCase();
+      result = result.filter(ch => ch && ch.category && String(ch.category).toLowerCase().includes(catLower));
+    }
+
+    if (search) {
+      const sLower = String(search).toLowerCase();
+      result = result.filter(ch => {
+        if (!ch) return false;
+        const nameMatch = ch.name ? String(ch.name).toLowerCase().includes(sLower) : false;
+        const catMatch = ch.category ? String(ch.category).toLowerCase().includes(sLower) : false;
+        return nameMatch || catMatch;
+      });
+    }
+
+    // Extraction of unique metadata for filters (using the full cache) safely
+    const fullSource = cachedChannels || [];
+    const countries = Array.from(new Set(
+      fullSource
+        .map(ch => ch && ch.country ? String(ch.country).toUpperCase().trim() : '')
+        .filter(Boolean)
+    )).sort();
+
+    const categories = Array.from(new Set(
+      fullSource
+        .map(ch => ch && ch.category ? String(ch.category).trim() : '')
+        .filter(Boolean)
+    )).sort();
+
+    const parsedLimit = parseInt(String(limit), 10) || 60;
+    const parsedOffset = parseInt(String(offset), 10) || 0;
+
+    const total = result.length;
+    const paginatedResult = Math.min(parsedOffset, total) >= total 
+      ? [] 
+      : result.slice(parsedOffset, parsedOffset + parsedLimit);
+
+    // Calculate testing stats for default/loaded channels
+    const totalCount = cachedChannels.length;
+    const workingCount = cachedChannels.filter(ch => ch && ch.status === 'working').length;
+    const brokenCount = cachedChannels.filter(ch => ch && ch.status === 'broken').length;
+    const untestedCount = cachedChannels.filter(ch => !ch || !ch.status || ch.status === 'unknown').length;
+
+    res.json({
+      channels: paginatedResult,
+      total,
+      countries,
+      categories,
+      isFetching: isFetchingIPTV,
+      error: iptvError,
+      stats: {
+        total: totalCount,
+        working: workingCount,
+        broken: brokenCount,
+        untested: untestedCount
+      }
+    });
+  } catch (err: any) {
+    console.error('Error handling /api/iptv/channels:', err);
+    res.status(500).json({
+      channels: [],
+      total: 0,
+      countries: [],
+      categories: [],
+      isFetching: false,
+      error: err.message || 'Erro interno do servidor ao carregar canais.'
+    });
   }
+});
 
-  const { country, category, search, limit = '60', offset = '0' } = req.query;
-  let result = [...cachedChannels];
+// REST Endpoint for +IPTV channels (New separate list)
+app.get('/api/iptv/plus-channels', async (req, res) => {
+  try {
+    // Lazy load the +IPTV list if empty
+    if (cachedPlusChannels.length === 0 && !isFetchingPlusIPTV) {
+      fetchPlusIPTVChannels().catch(err => {
+        console.error('Background fetchPlusIPTVChannels error:', err);
+      });
+    }
 
-  // Filters
-  if (country) {
-    const cUpper = String(country).toUpperCase();
-    result = result.filter(ch => ch.country === cUpper);
+    const { category, search, limit = '60', offset = '0', onlyWorking } = req.query;
+    let result = [...cachedPlusChannels];
+
+    // Filter by working status if requested
+    if (onlyWorking === 'true') {
+      result = result.filter(ch => ch && ch.status === 'working');
+    }
+
+    // Filter by category
+    if (category) {
+      const catLower = String(category).toLowerCase();
+      result = result.filter(ch => ch && ch.category && String(ch.category).toLowerCase().includes(catLower));
+    }
+
+    // Filter by search
+    if (search) {
+      const sLower = String(search).toLowerCase();
+      result = result.filter(ch => {
+        if (!ch) return false;
+        const nameMatch = ch.name ? String(ch.name).toLowerCase().includes(sLower) : false;
+        const catMatch = ch.category ? String(ch.category).toLowerCase().includes(sLower) : false;
+        return nameMatch || catMatch;
+      });
+    }
+
+    // Extraction of unique categories safely
+    const fullSource = cachedPlusChannels || [];
+    const categories = Array.from(new Set(
+      fullSource
+        .map(ch => ch && ch.category ? String(ch.category).trim() : '')
+        .filter(Boolean)
+    )).sort();
+
+    const parsedLimit = parseInt(String(limit), 10) || 60;
+    const parsedOffset = parseInt(String(offset), 10) || 0;
+
+    const total = result.length;
+    const paginatedResult = Math.min(parsedOffset, total) >= total 
+      ? [] 
+      : result.slice(parsedOffset, parsedOffset + parsedLimit);
+
+    // Provide testing progress stats
+    const totalCount = cachedPlusChannels.length;
+    const workingCount = cachedPlusChannels.filter(ch => ch && ch.status === 'working').length;
+    const brokenCount = cachedPlusChannels.filter(ch => ch && ch.status === 'broken').length;
+    const untestedCount = cachedPlusChannels.filter(ch => !ch || !ch.status || ch.status === 'unknown').length;
+
+    res.json({
+      channels: paginatedResult,
+      total,
+      categories,
+      isFetching: isFetchingPlusIPTV,
+      error: plusIptvError,
+      stats: {
+        total: totalCount,
+        working: workingCount,
+        broken: brokenCount,
+        untested: untestedCount
+      }
+    });
+  } catch (err: any) {
+    console.error('Error handling /api/iptv/plus-channels:', err);
+    res.status(500).json({
+      channels: [],
+      total: 0,
+      categories: [],
+      isFetching: false,
+      error: err.message || 'Erro interno ao carregar canais +IPTV.'
+    });
   }
+});
 
-  if (category) {
-    const catLower = String(category).toLowerCase();
-    result = result.filter(ch => ch.category.toLowerCase().includes(catLower));
+// REST Endpoint to trigger instant single stream testing
+app.post('/api/iptv/test-single', express.json(), async (req, res) => {
+  try {
+    const { channelId, isPlus } = req.body;
+    if (!channelId) {
+      return res.status(400).json({ error: 'channelId is required' });
+    }
+
+    const list = isPlus ? cachedPlusChannels : cachedChannels;
+    const ch = list.find(c => c && c.id === channelId);
+    if (!ch) {
+      return res.status(404).json({ error: 'Canal não encontrado.' });
+    }
+
+    const isWorking = await testStreamUrl(ch.videoUrl);
+    ch.status = isWorking ? 'working' : 'broken';
+    
+    res.json({ id: ch.id, status: ch.status });
+  } catch (err: any) {
+    console.error('Error in /api/iptv/test-single:', err);
+    res.status(500).json({ error: err.message || 'Erro ao testar canal.' });
   }
+});
 
-  if (search) {
-    const sLower = String(search).toLowerCase();
-    result = result.filter(ch => 
-      ch.name.toLowerCase().includes(sLower) || 
-      ch.category.toLowerCase().includes(sLower)
-    );
-  }
-
-  // Extraction of unique metadata for filters (using the full cache)
-  const fullSource = cachedChannels;
-  const countries = Array.from(new Set(fullSource.map(ch => ch.country).filter(Boolean))).sort();
-  const categories = Array.from(new Set(fullSource.map(ch => ch.category).filter(Boolean))).sort();
-
-  const parsedLimit = parseInt(String(limit), 10) || 60;
-  const parsedOffset = parseInt(String(offset), 10) || 0;
-
-  const total = result.length;
-  const paginatedResult = Math.min(parsedOffset, total) >= total 
-    ? [] 
-    : result.slice(parsedOffset, parsedOffset + parsedLimit);
+// REST Endpoint to fetch overall auto tester statistics
+app.get('/api/iptv/test-stats', (req, res) => {
+  const defaultTotal = cachedChannels.length;
+  const defaultWorking = cachedChannels.filter(c => c.status === 'working').length;
+  const defaultBroken = cachedChannels.filter(c => c.status === 'broken').length;
+  
+  const plusTotal = cachedPlusChannels.length;
+  const plusWorking = cachedPlusChannels.filter(c => c.status === 'working').length;
+  const plusBroken = cachedPlusChannels.filter(c => c.status === 'broken').length;
 
   res.json({
-    channels: paginatedResult,
-    total,
-    countries,
-    categories,
-    isFetching: isFetchingIPTV,
-    error: iptvError
+    defaultList: {
+      total: defaultTotal,
+      working: defaultWorking,
+      broken: defaultBroken,
+      untested: defaultTotal - defaultWorking - defaultBroken
+    },
+    plusList: {
+      total: plusTotal,
+      working: plusWorking,
+      broken: plusBroken,
+      untested: plusTotal - plusWorking - plusBroken
+    },
+    totalTestedCount,
+    isTesterRunning
   });
 });
 

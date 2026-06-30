@@ -9,7 +9,7 @@ import LiveTvPlayer from './components/LiveTvPlayer';
 
 export default function App() {
   // Navigation
-  const [activeTab, setActiveTab] = useState<'warez' | 'tv' | 'watchlist'>('watchlist');
+  const [activeTab, setActiveTab] = useState<'warez' | 'tv' | 'watchlist' | 'plus_iptv'>('watchlist');
   
   // Ref to track if sintonizing a channel clicked from watchlist to prevent overwriting
   const watchlistSelectionRef = useRef<string | null>(null);
@@ -19,6 +19,23 @@ export default function App() {
     const saved = localStorage.getItem('warez_watchlist_v2');
     return saved ? JSON.parse(saved) : [];
   });
+
+  // +IPTV States
+  const [plusIptvChannels, setPlusIptvChannels] = useState<LiveChannel[]>([]);
+  const [plusIptvCategories, setPlusIptvCategories] = useState<string[]>([]);
+  const [selectedPlusIptvCategory, setSelectedPlusIptvCategory] = useState<string>('');
+  const [plusIptvSearchQuery, setPlusIptvSearchQuery] = useState<string>('');
+  const [isFetchingPlusIptv, setIsFetchingPlusIptv] = useState<boolean>(false);
+  const [plusIptvTotal, setPlusIptvTotal] = useState<number>(0);
+  const [plusIptvPage, setPlusIptvPage] = useState<number>(1);
+  const [plusIptvLoadingError, setPlusIptvLoadingError] = useState<string>('');
+  const [plusIptvStats, setPlusIptvStats] = useState<{ total: number; working: number; broken: number; untested: number }>({ total: 0, working: 0, broken: 0, untested: 0 });
+  const [defaultIptvStats, setDefaultIptvStats] = useState<{ total: number; working: number; broken: number; untested: number }>({ total: 0, working: 0, broken: 0, untested: 0 });
+  
+  // Stream testing toggles
+  const [onlyWorkingDefault, setOnlyWorkingDefault] = useState<boolean>(false);
+  const [onlyWorkingPlus, setOnlyWorkingPlus] = useState<boolean>(true); // Default to true so they see functional channels first!
+  const [testingChannelsIds, setTestingChannelsIds] = useState<{ [id: string]: boolean }>({});
 
   // Continue Watching (Local Storage)
   const [continueWatching, setContinueWatching] = useState<any[]>(() => {
@@ -242,6 +259,7 @@ export default function App() {
       const offset = (page - 1) * limit;
       let url = `/api/iptv/channels?limit=${limit}&offset=${offset}`;
       
+      if (onlyWorkingDefault) url += `&onlyWorking=true`;
       if (selectedIptvCountry) url += `&country=${encodeURIComponent(selectedIptvCountry)}`;
       if (selectedIptvCategory) url += `&category=${encodeURIComponent(selectedIptvCategory)}`;
       if (iptvSearchQuery) url += `&search=${encodeURIComponent(iptvSearchQuery)}`;
@@ -265,6 +283,9 @@ export default function App() {
       setIptvTotal(data.total || LIVE_CHANNELS.length);
       if (data.countries && data.countries.length > 0) setIptvCountries(data.countries);
       if (data.categories && data.categories.length > 0) setIptvCategories(data.categories);
+      if (data.stats) {
+        setDefaultIptvStats(data.stats);
+      }
 
       if (data.channels && data.channels.length > 0 && resetList) {
         if (watchlistSelectionRef.current) {
@@ -281,6 +302,79 @@ export default function App() {
       setIptvTotal(LIVE_CHANNELS.length);
     } finally {
       setIsFetchingIptv(false);
+    }
+  };
+
+  // Fetch dynamic +IPTV channels
+  const fetchPlusIptvChannelsList = async (page: number = 1, resetList: boolean = false) => {
+    setIsFetchingPlusIptv(true);
+    setPlusIptvLoadingError('');
+    try {
+      const limit = 45;
+      const offset = (page - 1) * limit;
+      let url = `/api/iptv/plus-channels?limit=${limit}&offset=${offset}`;
+      
+      if (onlyWorkingPlus) url += `&onlyWorking=true`;
+      if (selectedPlusIptvCategory) url += `&category=${encodeURIComponent(selectedPlusIptvCategory)}`;
+      if (plusIptvSearchQuery) url += `&search=${encodeURIComponent(plusIptvSearchQuery)}`;
+
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Falha ao sintonizar servidores +IPTV.');
+      const data = await res.json();
+      
+      if (resetList || page === 1) {
+        setPlusIptvChannels(data.channels || []);
+      } else {
+        setPlusIptvChannels(prev => {
+          const existingIds = new Set(prev.map(ch => ch.id));
+          const filteredNew = (data.channels || []).filter((ch: LiveChannel) => !existingIds.has(ch.id));
+          return [...prev, ...filteredNew];
+        });
+      }
+      
+      setPlusIptvTotal(data.total || 0);
+      if (data.categories && data.categories.length > 0) setPlusIptvCategories(data.categories);
+      if (data.stats) {
+        setPlusIptvStats(data.stats);
+      }
+
+      if (data.channels && data.channels.length > 0 && resetList) {
+        setActiveChannel(data.channels[0]);
+      }
+    } catch (err: any) {
+      console.error('Error fetching +IPTV:', err);
+      setPlusIptvLoadingError(err.message || 'Erro ao carregar canais +IPTV.');
+    } finally {
+      setIsFetchingPlusIptv(false);
+    }
+  };
+
+  // Manual tester trigger
+  const testChannelManually = async (channelId: string, isPlus: boolean) => {
+    setTestingChannelsIds(prev => ({ ...prev, [channelId]: true }));
+    try {
+      const res = await fetch('/api/iptv/test-single', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channelId, isPlus })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const updateStatusInList = (list: LiveChannel[]) => 
+          list.map(ch => ch.id === channelId ? { ...ch, status: data.status } : ch);
+        
+        if (isPlus) {
+          setPlusIptvChannels(updateStatusInList);
+        } else {
+          setIptvChannels(updateStatusInList);
+        }
+        
+        setActiveChannel(prev => prev && prev.id === channelId ? { ...prev, status: data.status } : prev);
+      }
+    } catch (e) {
+      console.error('Error testing channel manually:', e);
+    } finally {
+      setTestingChannelsIds(prev => ({ ...prev, [channelId]: false }));
     }
   };
 
@@ -301,7 +395,7 @@ export default function App() {
       fetchIptvChannelsList(1, true);
       setIptvPage(1);
     }
-  }, [selectedIptvCountry, selectedIptvCategory, activeTab]);
+  }, [selectedIptvCountry, selectedIptvCategory, activeTab, onlyWorkingDefault]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -313,14 +407,62 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [iptvSearchQuery]);
 
+  useEffect(() => {
+    if (activeTab === 'plus_iptv') {
+      fetchPlusIptvChannelsList(1, true);
+      setPlusIptvPage(1);
+    }
+  }, [selectedPlusIptvCategory, activeTab, onlyWorkingPlus]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (activeTab === 'plus_iptv' && plusIptvSearchQuery) {
+        fetchPlusIptvChannelsList(1, true);
+        setPlusIptvPage(1);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [plusIptvSearchQuery]);
+
+  // Live fetch testing stats periodically
+  useEffect(() => {
+    if (activeTab !== 'tv' && activeTab !== 'plus_iptv') return;
+    
+    // Fetch stats immediately on mount
+    fetch('/api/iptv/test-stats')
+      .then(res => res.ok && res.json())
+      .then(data => {
+        if (data) {
+          if (data.defaultList) setDefaultIptvStats(data.defaultList);
+          if (data.plusList) setPlusIptvStats(data.plusList);
+        }
+      })
+      .catch(e => console.error(e));
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/iptv/test-stats');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.defaultList) setDefaultIptvStats(data.defaultList);
+          if (data.plusList) setPlusIptvStats(data.plusList);
+        }
+      } catch (e) {
+        console.error('Error fetching IPTV tester stats:', e);
+      }
+    }, 6000);
+    
+    return () => clearInterval(interval);
+  }, [activeTab]);
+
   // ==================== D-PAD CONTROLLER ACTION ROUTER ====================
   const triggerRemoteAction = (action: string) => {
     setLastRemoteAction(action);
     setTimeout(() => setLastRemoteAction(''), 300);
 
     if (focusedSection === 'sidebar') {
-      const tabs: ('warez' | 'tv' | 'watchlist')[] = ['warez', 'tv', 'watchlist'];
-      const currentIndex = tabs.indexOf(activeTab);
+      const tabs: ('warez' | 'tv' | 'plus_iptv' | 'watchlist')[] = ['warez', 'tv', 'plus_iptv', 'watchlist'];
+      const currentIndex = tabs.indexOf(activeTab as any);
 
       if (action === 'UP') {
         const nextIdx = (currentIndex - 1 + tabs.length) % tabs.length;
@@ -336,26 +478,38 @@ export default function App() {
     else if (focusedSection === 'grid') {
       if (action === 'LEFT') {
         // If on the far left, return to sidebar
-        if (activeTab === 'tv' || focusedIndex % 5 === 0 || focusedIndex === 0) {
+        if (activeTab === 'tv' || activeTab === 'plus_iptv' || focusedIndex % 5 === 0 || focusedIndex === 0) {
           setFocusedSection('sidebar');
         } else {
           setFocusedIndex(prev => Math.max(0, prev - 1));
         }
       } 
       else if (action === 'RIGHT') {
-        const maxLimit = activeTab === 'warez' ? warezResults.length : activeTab === 'tv' ? iptvChannels.length : watchlist.length;
+        const maxLimit = activeTab === 'warez' 
+          ? warezResults.length 
+          : activeTab === 'tv' 
+            ? iptvChannels.length 
+            : activeTab === 'plus_iptv'
+              ? plusIptvChannels.length
+              : watchlist.length;
         setFocusedIndex(prev => Math.min(maxLimit - 1, prev + 1));
       } 
       else if (action === 'UP') {
-        if (activeTab === 'tv') {
+        if (activeTab === 'tv' || activeTab === 'plus_iptv') {
           setFocusedIndex(prev => Math.max(0, prev - 1));
         } else {
           setFocusedIndex(prev => Math.max(0, prev - 5));
         }
       } 
       else if (action === 'DOWN') {
-        const maxLimit = activeTab === 'warez' ? warezResults.length : activeTab === 'tv' ? iptvChannels.length : watchlist.length;
-        if (activeTab === 'tv') {
+        const maxLimit = activeTab === 'warez' 
+          ? warezResults.length 
+          : activeTab === 'tv' 
+            ? iptvChannels.length 
+            : activeTab === 'plus_iptv'
+              ? plusIptvChannels.length
+              : watchlist.length;
+        if (activeTab === 'tv' || activeTab === 'plus_iptv') {
           setFocusedIndex(prev => Math.min(maxLimit - 1, prev + 1));
         } else {
           setFocusedIndex(prev => Math.min(maxLimit - 1, prev + 5));
@@ -369,6 +523,8 @@ export default function App() {
           setFocusedIndex(0);
         } else if (activeTab === 'tv' && iptvChannels[focusedIndex]) {
           setActiveChannel(iptvChannels[focusedIndex]);
+        } else if (activeTab === 'plus_iptv' && plusIptvChannels[focusedIndex]) {
+          setActiveChannel(plusIptvChannels[focusedIndex]);
         } else if (activeTab === 'watchlist' && watchlist[focusedIndex]) {
           const item = watchlist[focusedIndex];
           if (item.type === 'tv') {
@@ -469,7 +625,9 @@ export default function App() {
       return item.genres && (item.genres.includes('Animação') || item.genres.includes('Família') || item.genres.includes('Kids'));
     }
     if (selectedTypeFilter === 'lançamentos') {
-      return item.year && (parseInt(item.year, 10) >= 2023 || item.year.includes('2024') || item.year.includes('2025') || item.year.includes('2026'));
+      const yearStr = String(item.year || '');
+      const yearNum = parseInt(yearStr, 10);
+      return yearStr !== '' && ((!isNaN(yearNum) && yearNum >= 2023) || yearStr.includes('2024') || yearStr.includes('2025') || yearStr.includes('2026'));
     }
     if (selectedTypeFilter === 'acao') {
       return item.genres && (item.genres.includes('Ação') || item.genres.includes('Aventura'));
@@ -514,6 +672,7 @@ export default function App() {
             {[
               { id: 'warez', label: 'Filmes & Séries', icon: Search },
               { id: 'tv', label: 'Canais de TV', icon: Tv },
+              { id: 'plus_iptv', label: '+IPTV', icon: Plus },
               { id: 'watchlist', label: 'Minha Lista', icon: Heart }
             ].map((menu) => {
               const Icon = menu.icon;
@@ -712,7 +871,7 @@ export default function App() {
                     const isItemFocused = focusedSection === 'grid' && focusedIndex === index;
                     return (
                       <div
-                        key={item.id}
+                        key={`${item.id}-${index}`}
                         onClick={() => {
                           setSelectedWarezContent(item);
                           setSelectedWarezSeason(1);
@@ -783,6 +942,47 @@ export default function App() {
               <p className="text-xs text-zinc-400">Assista canais abertos e transmissões públicas sintonizadas automaticamente.</p>
             </div>
 
+            {/* Auto Tester Live Progress Banner */}
+            {defaultIptvStats.total > 0 && (
+              <div className="bg-gradient-to-r from-emerald-950/20 to-zinc-950 border border-emerald-900/30 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <span className="text-[10px] font-black text-emerald-400 tracking-wider font-mono uppercase">Varredura e Teste Automático IPTV</span>
+                  </div>
+                  <h3 className="text-sm font-bold text-white">Monitor de Saúde dos Canais</h3>
+                  <p className="text-xs text-zinc-400">Verificando canais em segundo plano para isolar links quebrados.</p>
+                </div>
+                <div className="flex items-center gap-4 sm:gap-6">
+                  <div className="text-center">
+                    <div className="text-lg font-black text-white">{defaultIptvStats.total}</div>
+                    <div className="text-[9px] text-zinc-500 font-bold uppercase font-mono">Total</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-black text-emerald-400">
+                      {defaultIptvStats.working}
+                    </div>
+                    <div className="text-[9px] text-emerald-500/70 font-bold uppercase font-mono">Funcionando</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-black text-red-400">
+                      {defaultIptvStats.broken}
+                    </div>
+                    <div className="text-[9px] text-red-400/70 font-bold uppercase font-mono">Offline</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-black text-zinc-500">
+                      {defaultIptvStats.untested}
+                    </div>
+                    <div className="text-[9px] text-zinc-500 font-bold uppercase font-mono">Aguardando</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* IPTV Filter bar */}
             <div className="bg-zinc-900/40 border border-zinc-900 p-4 rounded-2xl space-y-3">
               <div className="flex flex-col gap-3">
@@ -797,7 +997,7 @@ export default function App() {
                   />
                 </div>
                 
-                {/* Premium Country Tab Pills (Estilo YouCine) */}
+                {/* Premium Country Tab Pills */}
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 w-full">
                   <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 scrollbar-none">
                     {[
@@ -805,6 +1005,7 @@ export default function App() {
                       { id: 'US', label: '🇺🇸 ESTADOS UNIDOS' },
                       { id: 'AR', label: '🇦🇷 ARGENTINA' },
                       { id: 'MX', label: '🇲🇽 MÉXICO' },
+                      { id: 'OUTROS', label: '📺 OUTROS' },
                       { id: '', label: '🌎 TODOS' }
                     ].map((tab) => {
                       const isActive = selectedIptvCountry === tab.id;
@@ -828,10 +1029,30 @@ export default function App() {
                     })}
                   </div>
 
-                  <div className="flex items-center space-x-2 shrink-0">
+                  <div className="flex items-center gap-3 shrink-0">
+                    {/* Toggle to show only working channels */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOnlyWorkingDefault(!onlyWorkingDefault);
+                        setIptvPage(1);
+                      }}
+                      className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center space-x-2 border cursor-pointer ${
+                        onlyWorkingDefault 
+                          ? 'bg-emerald-500/15 border-emerald-500 text-emerald-400 font-extrabold' 
+                          : 'bg-zinc-950 border-zinc-850 text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      <Check size={12} className={onlyWorkingDefault ? 'opacity-100 text-emerald-400' : 'opacity-40'} />
+                      <span>Online ({defaultIptvStats.working})</span>
+                    </button>
+
                     <select
                       value={selectedIptvCategory}
-                      onChange={(e) => setSelectedIptvCategory(e.target.value)}
+                      onChange={(e) => {
+                        setSelectedIptvCategory(e.target.value);
+                        setIptvPage(1);
+                      }}
                       className="bg-zinc-950 border border-zinc-850 text-xs font-bold text-white rounded-xl px-3 py-2.5 focus:outline-none cursor-pointer"
                     >
                       <option value="">Todas Categorias</option>
@@ -870,36 +1091,69 @@ export default function App() {
                 </div>
 
                 {activeChannel && (
-                  <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-4 flex items-center justify-between">
-                    <div>
-                      <span className="text-[9px] text-zinc-500 font-mono uppercase">EPG TRANSMISSÃO</span>
-                      <h3 className="text-sm font-bold text-white mt-0.5">{activeChannel.nowPlaying || 'Programação de TV ao Vivo'}</h3>
-                      <p className="text-[11px] text-zinc-400">Próximo: {activeChannel.nextShow}</p>
+                  <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="text-2xl mt-1">📺</div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] text-zinc-500 font-mono uppercase">EPG TRANSMISSÃO</span>
+                          {/* Channel Status Badge */}
+                          {activeChannel.status === 'working' && (
+                            <span className="text-[8px] font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">ONLINE</span>
+                          )}
+                          {activeChannel.status === 'broken' && (
+                            <span className="text-[8px] font-black text-red-400 bg-red-500/10 px-2.5 py-0.5 rounded-full border border-red-500/20">OFFLINE</span>
+                          )}
+                          {(!activeChannel.status || activeChannel.status === 'unknown') && (
+                            <span className="text-[8px] font-black text-zinc-400 bg-zinc-500/10 px-2.5 py-0.5 rounded-full border border-zinc-500/20 font-mono">AGUARDANDO TESTE</span>
+                          )}
+                        </div>
+                        <h3 className="text-sm font-bold text-white mt-0.5 truncate">{activeChannel.name}</h3>
+                        <p className="text-xs text-zinc-300 mt-1">{activeChannel.nowPlaying || 'Programação de TV ao Vivo'}</p>
+                        <p className="text-[11px] text-zinc-400 mt-0.5">Próximo: {activeChannel.nextShow}</p>
+                      </div>
                     </div>
-                    <button
-                      onClick={() => toggleWatchlist({ ...activeChannel, type: 'tv' })}
-                      className={`p-2.5 rounded-xl border transition ${
-                        isFavorited(activeChannel.id)
-                          ? 'bg-amber-500/15 border-amber-500 text-amber-500'
-                          : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white'
-                      }`}
-                    >
-                      <Heart size={16} className={isFavorited(activeChannel.id) ? 'fill-amber-500 text-amber-500' : ''} />
-                    </button>
+                    <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                      <button
+                        onClick={() => testChannelManually(activeChannel.id, false)}
+                        disabled={testingChannelsIds[activeChannel.id]}
+                        className="px-3.5 py-2.5 bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-bold text-zinc-300 hover:text-white transition flex items-center space-x-2 disabled:opacity-50 cursor-pointer"
+                        title="Testar sinal agora"
+                      >
+                        <RefreshCcw size={12} className={testingChannelsIds[activeChannel.id] ? 'animate-spin text-amber-500' : ''} />
+                        <span>{testingChannelsIds[activeChannel.id] ? 'Testando...' : 'Testar Canal'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => toggleWatchlist({ ...activeChannel, type: 'tv' })}
+                        className={`p-2.5 rounded-xl border transition cursor-pointer ${
+                          isFavorited(activeChannel.id)
+                            ? 'bg-amber-500/15 border-amber-500 text-amber-500'
+                            : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        <Heart size={16} className={isFavorited(activeChannel.id) ? 'fill-amber-500 text-amber-500' : ''} />
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
 
               {/* Channels Side list */}
               <div className="space-y-3">
-                <h3 className="text-xs font-black text-zinc-500 uppercase tracking-widest font-mono px-1">Canais Sintonizados ({iptvTotal})</h3>
-                <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1 scrollbar-thin">
+                <div className="flex items-center justify-between px-1">
+                  <h3 className="text-xs font-black text-zinc-500 uppercase tracking-widest font-mono">Canais Sintonizados ({iptvTotal})</h3>
+                  {isFetchingIptv && (
+                    <span className="text-[10px] text-amber-500 animate-pulse font-bold">Carregando...</span>
+                  )}
+                </div>
+                <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1 scrollbar-thin">
                   {iptvChannels.map((ch, index) => {
                     const isSelected = activeChannel && activeChannel.id === ch.id;
                     const isChFocused = focusedSection === 'grid' && focusedIndex === index;
                     return (
                       <div
-                        key={ch.id}
+                        key={`${ch.id}-${index}`}
                         onClick={() => setActiveChannel(ch)}
                         className={`p-3 rounded-xl border cursor-pointer transition flex items-center justify-between group ${
                           isSelected 
@@ -910,7 +1164,18 @@ export default function App() {
                         <div className="flex items-center space-x-3 min-w-0">
                           <span className="text-xl">📺</span>
                           <div className="min-w-0">
-                            <h4 className="text-xs font-bold text-white truncate leading-tight group-hover:text-amber-400 transition">{ch.name}</h4>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <h4 className="text-xs font-bold text-white truncate leading-tight group-hover:text-amber-400 transition">{ch.name}</h4>
+                              {ch.status === 'working' && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" title="Funcionando" />
+                              )}
+                              {ch.status === 'broken' && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" title="Offline" />
+                              )}
+                              {(!ch.status || ch.status === 'unknown') && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 shrink-0" title="Pendente" />
+                              )}
+                            </div>
                             <p className="text-[10px] text-zinc-500 truncate mt-0.5">{ch.category} • {ch.nowPlaying}</p>
                           </div>
                         </div>
@@ -918,6 +1183,261 @@ export default function App() {
                       </div>
                     );
                   })}
+
+                  {iptvChannels.length === 0 && !isFetchingIptv && (
+                    <div className="text-center py-10 text-zinc-500 text-xs font-mono">
+                      Nenhum canal ativo com os filtros selecionados.
+                    </div>
+                  )}
+
+                  {iptvChannels.length < iptvTotal && !isFetchingIptv && (
+                    <button
+                      onClick={() => {
+                        const nextPage = iptvPage + 1;
+                        setIptvPage(nextPage);
+                        fetchIptvChannelsList(nextPage, false);
+                      }}
+                      className="w-full py-2 bg-zinc-900 hover:bg-zinc-850 text-xs font-bold text-zinc-300 hover:text-white border border-zinc-850 rounded-xl transition cursor-pointer text-center"
+                    >
+                      Carregar Mais Canais
+                    </button>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          </section>
+        )}
+
+        {/* ================= +IPTV TAB SECTION ================= */}
+        {activeTab === 'plus_iptv' && (
+          <section id="plus-iptv-section" className="space-y-6 animate-fade-in">
+            
+            {/* Header */}
+            <div className="border-b border-zinc-900 pb-5">
+              <span className="text-[10px] bg-amber-500/10 text-amber-500 px-3 py-1 rounded-full border border-amber-500/20 uppercase font-black tracking-widest font-mono">+IPTV CANAIS FULL</span>
+              <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight mt-1">Playlist +IPTV Completa</h2>
+              <p className="text-xs text-zinc-400">Transmissões premium sintonizadas a partir de repositórios dinâmicos do Brasil.</p>
+            </div>
+
+            {/* Auto Tester Live Progress Banner */}
+            {plusIptvStats.total > 0 && (
+              <div className="bg-gradient-to-r from-emerald-950/20 to-zinc-950 border border-emerald-900/30 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <span className="text-[10px] font-black text-emerald-400 tracking-wider font-mono uppercase">Verificação de Link Ativa (+IPTV)</span>
+                  </div>
+                  <h3 className="text-sm font-bold text-white">Monitor de Saúde +IPTV</h3>
+                  <p className="text-xs text-zinc-400">O sistema monitora e isola automaticamente apenas as streams funcionais.</p>
+                </div>
+                <div className="flex items-center gap-4 sm:gap-6">
+                  <div className="text-center">
+                    <div className="text-lg font-black text-white">{plusIptvStats.total}</div>
+                    <div className="text-[9px] text-zinc-500 font-bold uppercase font-mono">Total</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-black text-emerald-400">
+                      {plusIptvStats.working}
+                    </div>
+                    <div className="text-[9px] text-emerald-500/70 font-bold uppercase font-mono">Funcionando</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-black text-red-400">
+                      {plusIptvStats.broken}
+                    </div>
+                    <div className="text-[9px] text-red-400/70 font-bold uppercase font-mono">Offline</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-black text-zinc-500">
+                      {plusIptvStats.untested}
+                    </div>
+                    <div className="text-[9px] text-zinc-500 font-bold uppercase font-mono">Aguardando</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Filter Bar */}
+            <div className="bg-zinc-900/40 border border-zinc-900 p-4 rounded-2xl space-y-3">
+              <div className="flex flex-col sm:flex-row items-center gap-3 w-full">
+                <div className="relative flex-grow w-full">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
+                  <input
+                    type="text"
+                    placeholder="Buscar canais por nome em +IPTV..."
+                    value={plusIptvSearchQuery}
+                    onChange={(e) => setPlusIptvSearchQuery(e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-850 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0 w-full sm:w-auto justify-end">
+                  {/* Toggle to show only working channels */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOnlyWorkingPlus(!onlyWorkingPlus);
+                      setPlusIptvPage(1);
+                    }}
+                    className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center space-x-2 border cursor-pointer ${
+                      onlyWorkingPlus 
+                        ? 'bg-emerald-500/15 border-emerald-500 text-emerald-400 font-extrabold' 
+                        : 'bg-zinc-950 border-zinc-850 text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <Check size={12} className={onlyWorkingPlus ? 'opacity-100 text-emerald-400' : 'opacity-40'} />
+                    <span>Apenas Online ({plusIptvStats.working})</span>
+                  </button>
+
+                  <select
+                    value={selectedPlusIptvCategory}
+                    onChange={(e) => {
+                      setSelectedPlusIptvCategory(e.target.value);
+                      setPlusIptvPage(1);
+                    }}
+                    className="bg-zinc-950 border border-zinc-850 text-xs font-bold text-white rounded-xl px-3 py-2.5 focus:outline-none cursor-pointer"
+                  >
+                    <option value="">Todas Categorias</option>
+                    {plusIptvCategories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Main +IPTV Layout Panel */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* TV Player frame */}
+              <div className="lg:col-span-2 space-y-4">
+                <div className="relative rounded-2xl overflow-hidden bg-black aspect-video border border-zinc-900 shadow-2xl flex flex-col justify-between">
+                  {activeChannel ? (
+                    <LiveTvPlayer channel={activeChannel} />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-black text-zinc-600 p-8">
+                      <Tv size={44} className="mb-2 text-amber-500/50" />
+                      <p className="text-xs font-bold text-zinc-300">Nenhum canal sintonizado</p>
+                    </div>
+                  )}
+                </div>
+
+                {activeChannel && (
+                  <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="text-2xl mt-1">📺</div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] text-zinc-500 font-mono uppercase">EPG TRANSMISSÃO</span>
+                          {/* Channel Status Badge */}
+                          {activeChannel.status === 'working' && (
+                            <span className="text-[8px] font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">ONLINE</span>
+                          )}
+                          {activeChannel.status === 'broken' && (
+                            <span className="text-[8px] font-black text-red-400 bg-red-500/10 px-2.5 py-0.5 rounded-full border border-red-500/20">OFFLINE</span>
+                          )}
+                          {(!activeChannel.status || activeChannel.status === 'unknown') && (
+                            <span className="text-[8px] font-black text-zinc-400 bg-zinc-500/10 px-2.5 py-0.5 rounded-full border border-zinc-500/20 font-mono">AGUARDANDO TESTE</span>
+                          )}
+                        </div>
+                        <h3 className="text-sm font-bold text-white mt-0.5 truncate">{activeChannel.name}</h3>
+                        <p className="text-xs text-zinc-300 mt-1">{activeChannel.nowPlaying || 'Programação de TV ao Vivo'}</p>
+                        <p className="text-[11px] text-zinc-400 mt-0.5">Próximo: {activeChannel.nextShow}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                      <button
+                        onClick={() => testChannelManually(activeChannel.id, true)}
+                        disabled={testingChannelsIds[activeChannel.id]}
+                        className="px-3.5 py-2.5 bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-bold text-zinc-300 hover:text-white transition flex items-center space-x-2 disabled:opacity-50 cursor-pointer"
+                        title="Testar sinal agora"
+                      >
+                        <RefreshCcw size={12} className={testingChannelsIds[activeChannel.id] ? 'animate-spin text-amber-500' : ''} />
+                        <span>{testingChannelsIds[activeChannel.id] ? 'Testando...' : 'Testar Canal'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => toggleWatchlist({ ...activeChannel, type: 'tv' })}
+                        className={`p-2.5 rounded-xl border transition cursor-pointer ${
+                          isFavorited(activeChannel.id)
+                            ? 'bg-amber-500/15 border-amber-500 text-amber-500'
+                            : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        <Heart size={16} className={isFavorited(activeChannel.id) ? 'fill-amber-500 text-amber-500' : ''} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Channels Side list */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <h3 className="text-xs font-black text-zinc-500 uppercase tracking-widest font-mono">Canais +IPTV ({plusIptvTotal})</h3>
+                  {isFetchingPlusIptv && (
+                    <span className="text-[10px] text-amber-500 animate-pulse font-bold">Carregando...</span>
+                  )}
+                </div>
+                <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1 scrollbar-thin">
+                  {plusIptvChannels.map((ch, index) => {
+                    const isSelected = activeChannel && activeChannel.id === ch.id;
+                    const isChFocused = focusedSection === 'grid' && focusedIndex === index;
+                    return (
+                      <div
+                        key={`${ch.id}-${index}`}
+                        onClick={() => setActiveChannel(ch)}
+                        className={`p-3 rounded-xl border cursor-pointer transition flex items-center justify-between group ${
+                          isSelected 
+                            ? 'bg-zinc-900 border-amber-500/50' 
+                            : 'bg-zinc-900/30 border-zinc-900/40 hover:border-zinc-800'
+                        } ${isChFocused ? 'ring-4 ring-amber-500 border-amber-500 scale-102' : ''}`}
+                      >
+                        <div className="flex items-center space-x-3 min-w-0">
+                          <span className="text-xl">📺</span>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <h4 className="text-xs font-bold text-white truncate leading-tight group-hover:text-amber-400 transition">{ch.name}</h4>
+                              {ch.status === 'working' && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" title="Funcionando" />
+                              )}
+                              {ch.status === 'broken' && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" title="Offline" />
+                              )}
+                              {(!ch.status || ch.status === 'unknown') && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 shrink-0" title="Pendente" />
+                              )}
+                            </div>
+                            <p className="text-[10px] text-zinc-500 truncate mt-0.5">{ch.category}</p>
+                          </div>
+                        </div>
+                        <ChevronRight size={14} className={isSelected ? 'text-amber-500' : 'text-zinc-600'} />
+                      </div>
+                    );
+                  })}
+
+                  {plusIptvChannels.length === 0 && !isFetchingPlusIptv && (
+                    <div className="text-center py-10 text-zinc-500 text-xs font-mono">
+                      Nenhum canal ativo com os filtros selecionados.
+                    </div>
+                  )}
+
+                  {plusIptvChannels.length < plusIptvTotal && !isFetchingPlusIptv && (
+                    <button
+                      onClick={() => {
+                        const nextPage = plusIptvPage + 1;
+                        setPlusIptvPage(nextPage);
+                        fetchPlusIptvChannelsList(nextPage, false);
+                      }}
+                      className="w-full py-2 bg-zinc-900 hover:bg-zinc-850 text-xs font-bold text-zinc-300 hover:text-white border border-zinc-850 rounded-xl transition cursor-pointer text-center"
+                    >
+                      Carregar Mais Canais
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1049,7 +1569,7 @@ export default function App() {
                   const isItemFocused = focusedSection === 'grid' && focusedIndex === index;
                   return (
                     <div
-                      key={item.id}
+                      key={`${item.id}-${index}`}
                       onClick={() => {
                         if (item.type === 'tv') {
                           watchlistSelectionRef.current = item.id;
