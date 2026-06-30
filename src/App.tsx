@@ -1724,8 +1724,8 @@ export default function App() {
                     break;
                   case 'servidor_8':
                     embedUrl = type === 'movie'
-                      ? `https://${superflixDomain}/api/filme/${tmdbId}`
-                      : `https://${superflixDomain}/api/serie/${tmdbId}/${s}/${e}`;
+                      ? `https://${superflixDomain}/api/filme/${tmdbId || idToUse}`
+                      : `https://${superflixDomain}/api/serie/${tmdbId || idToUse}/${s}/${e}`;
                     break;
                   default:
                     embedUrl = type === 'movie'
@@ -1852,17 +1852,25 @@ export default function App() {
                         <div className="mt-3 pt-3 border-t border-zinc-800/80 text-left">
                           {/* SuperFlix Domain configuration */}
                           {embedSource === 'servidor_8' && (
-                            <div className="space-y-2 bg-zinc-950/50 p-3 rounded-lg border border-zinc-850">
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                                <span className="text-[10px] font-mono font-black text-amber-500 uppercase tracking-wider">
-                                  🔧 Configuração SuperFlix API
-                                </span>
-                                <span className="text-[9px] font-medium text-zinc-500">
-                                  Mude o domínio caso o player não carregue
-                                </span>
+                            <div className="space-y-3 bg-zinc-950/50 p-3.5 rounded-lg border border-zinc-850">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-900 pb-2">
+                                <div className="flex items-center space-x-1.5">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                  <span className="text-[10px] font-mono font-black text-amber-500 uppercase tracking-wider">
+                                    🔧 Configuração SuperFlix API
+                                  </span>
+                                </div>
+                                <a 
+                                  href="https://superflixapi.lifestyle/doc"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[9px] font-bold text-amber-500 hover:text-amber-400 hover:underline flex items-center gap-1 cursor-pointer transition"
+                                >
+                                  Ver Doc Oficial ↗
+                                </a>
                               </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                <div className="space-y-1">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
                                   <label className="text-[9px] font-bold text-zinc-400 block">Escolha uma extensão:</label>
                                   <select
                                     value={superflixDomain}
@@ -1878,7 +1886,7 @@ export default function App() {
                                     <option value="superflixapi.top">superflixapi.top (Antigo / Fora do ar)</option>
                                   </select>
                                 </div>
-                                <div className="space-y-1">
+                                <div className="space-y-1.5">
                                   <label className="text-[9px] font-bold text-zinc-400 block">Ou digite o domínio manual:</label>
                                   <input
                                     type="text"
@@ -1887,6 +1895,23 @@ export default function App() {
                                     placeholder="Ex: novo-dominio.com"
                                     className="w-full bg-zinc-900 text-zinc-200 border border-zinc-800 text-[11px] px-2.5 py-2 rounded-lg focus:outline-none focus:border-amber-500 font-mono transition"
                                   />
+                                </div>
+                              </div>
+                              
+                              {/* Integrated Superflix API Doc Quick Reference */}
+                              <div className="mt-2 pt-2 border-t border-zinc-900 text-[10px] text-zinc-400 space-y-2">
+                                <div className="flex items-center justify-between text-[9px] font-bold text-zinc-400">
+                                  <span>📖 Guia Rápido da Documentação (Superflix):</span>
+                                  <span className="text-zinc-500 font-medium">Suporta ID do TMDB ou IMDB</span>
+                                </div>
+                                <div className="bg-zinc-900/60 p-2.5 rounded-lg border border-zinc-850 space-y-1 font-mono text-[9px]">
+                                  <p className="text-zinc-500">// Formato de Url do Embed:</p>
+                                  <p className="text-zinc-300">
+                                    <span className="text-amber-500 font-bold">Filmes:</span> https://{superflixDomain}/api/filme/<span className="text-emerald-400">{"{id}"}</span>
+                                  </p>
+                                  <p className="text-zinc-300">
+                                    <span className="text-amber-500 font-bold">Séries:</span> https://{superflixDomain}/api/serie/<span className="text-emerald-400">{"{id}"}</span>/<span className="text-purple-400">{"{temp}"}</span>/<span className="text-blue-400">{"{ep}"}</span>
+                                  </p>
                                 </div>
                               </div>
                             </div>
